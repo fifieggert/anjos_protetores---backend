@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum PerfilUsuario {
+  ADMIN
+  FUNCIONARIO
+  VOLUNTARIO
+}
+
+enum Especie {
+  CACHORRO
+  GATO
+  OUTRO
+}
+
+enum Porte {
+  PEQUENO
+  MEDIO
+  GRANDE
+}
+
+enum StatusAnimal {
+  DISPONIVEL
+  EM_TRATAMENTO
+  ADOTADO
+}
+
+enum CategoriaItem {
+  RACAO
+  MEDICAMENTO
+  HIGIENE
+  LIMPEZA
+  ACESSORIO
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
+}
+
+model Usuario {
+  id         String   @id @default(uuid())
+  nome       String
+  cpf        String   @unique
+  email      String   @unique
+  senhaHash  String
+  perfil     PerfilUsuario
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+
+  animais       Animal[]
+  doacoes       Doacao[]
+  saidasEstoque SaidaEstoque[]
+}
+
+model Animal {
+  id                String @id @default(uuid())
+
+  usuarioCadastroId String
+  usuarioCadastro   Usuario @relation(fields: [usuarioCadastroId], references: [id])
+
+  nome        String
+  especie     Especie
+  raca        String?
+  idade       Int?
+  porte       Porte
+  status      StatusAnimal @default(DISPONIVEL)
+  fotoUrl     String?
+  descricao   String?
+
+  criadoEm DateTime @default(now())
+
+  solicitacoes SolicitacaoAdocao[]
+}
+
+model ItemEstoque {
+  id                String @id @default(uuid())
+
+  nomeItem          String
+  categoria         CategoriaItem
+
+  quantidadeAtual   Int
+  quantidadeMinima  Int
+
+  criadoEm DateTime @default(now())
+
+  doacoes Doacao[]
+  saidas  SaidaEstoque[]
+}
+
+model Doacao {
+  id          String @id @default(uuid())
+
+  itemId      String
+  item        ItemEstoque @relation(fields: [itemId], references: [id])
+
+  usuarioId   String
+  usuario     Usuario @relation(fields: [usuarioId], references: [id])
+
+  quantidade  Int
+  doador      String
+
+  dataEntrada DateTime @default(now())
+}
+
+model SaidaEstoque {
+  id          String @id @default(uuid())
+
+  itemId      String
+  item        ItemEstoque @relation(fields: [itemId], references: [id])
+
+  usuarioId   String
+  usuario     Usuario @relation(fields: [usuarioId], references: [id])
+
+  quantidade  Int
+  finalidade  String
+
+  dataSaida   DateTime @default(now())
+}
+
+model SolicitacaoAdocao {
+  id               String @id @default(uuid())
+
+  animalId         String
+  animal           Animal @relation(fields: [animalId], references: [id])
+
+  nomeInteressado  String
+  email            String
+  telefone         String
+
+  status           StatusSolicitacao @default(PENDENTE)
+
+  justificativa    String?
+
+  criadoEm         DateTime @default(now())
+
+  termo            TermoAdocao?
+}
+
+model TermoAdocao {
+  id             String @id @default(uuid())
+
+  solicitacaoId  String @unique
+  solicitacao    SolicitacaoAdocao @relation(fields: [solicitacaoId], references: [id])
+
+  geradoEm       DateTime @default(now())
+
+  urlDocumento   String
+}
