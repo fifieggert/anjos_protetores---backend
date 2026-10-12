@@ -1,12 +1,13 @@
 import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
+import { usuarioSelect } from "./usuarioRepository";
 
 const saidaEstoqueSelect = {
     id: true,
     itemId: true,
     item: true,
     usuarioId: true,
-    usuario: true,
+    usuario: { select: usuarioSelect },
     quantidade: true,
     finalidade: true,
     dataSaida: true,
