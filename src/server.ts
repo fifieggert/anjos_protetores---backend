@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./config/env";
 import app from "./app";
 
 const PORT = process.env["PORT"] ? Number(process.env["PORT"]) : 4000;
