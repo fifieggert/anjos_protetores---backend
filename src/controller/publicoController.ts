@@ -16,26 +16,22 @@ function lerFiltro<T extends string>(valor: unknown, permitidos: readonly T[]): 
 
 export class publicoController {
     async listarAnimais(req: Request, res: Response) {
-        try {
-            const especie = lerFiltro(req.query["especie"], Object.values(Especie));
-            const porte = lerFiltro(req.query["porte"], Object.values(Porte));
+        const especie = lerFiltro(req.query["especie"], Object.values(Especie));
+        const porte = lerFiltro(req.query["porte"], Object.values(Porte));
 
-            if (especie === null) {
-                return res.status(400).json({ error: `Espécie inválida. Use: ${Object.values(Especie).join(", ")}.` });
-            }
-            if (porte === null) {
-                return res.status(400).json({ error: `Porte inválido. Use: ${Object.values(Porte).join(", ")}.` });
-            }
-
-            const filtros: FiltrosAnimalPublico = {
-                ...(especie ? { especie } : {}),
-                ...(porte ? { porte } : {}),
-            };
-
-            const animais = await repository.findDisponiveis(filtros);
-            return res.status(200).json(animais);
-        } catch (error) {
-            return res.status(500).json({ error: "Erro ao buscar animais disponíveis." });
+        if (especie === null) {
+            return res.status(400).json({ error: `Espécie inválida. Use: ${Object.values(Especie).join(", ")}.` });
         }
+        if (porte === null) {
+            return res.status(400).json({ error: `Porte inválido. Use: ${Object.values(Porte).join(", ")}.` });
+        }
+
+        const filtros: FiltrosAnimalPublico = {
+            ...(especie ? { especie } : {}),
+            ...(porte ? { porte } : {}),
+        };
+
+        const animais = await repository.findDisponiveis(filtros);
+        return res.status(200).json(animais);
     }
 }
