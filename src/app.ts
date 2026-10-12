@@ -4,11 +4,12 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import routes from "./routes";
+import { CORS_ORIGINS } from "./config/env";
 
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: CORS_ORIGINS }));
 app.use(morgan("dev"));
 app.use(express.json());
 

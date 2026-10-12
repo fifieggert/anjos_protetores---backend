@@ -1,5 +1,6 @@
 import prisma from "../config/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, StatusAnimal } from "@prisma/client";
+import type { Especie, Porte } from "@prisma/client";
 
 const animalSelect = {
     id: true,
@@ -14,6 +15,23 @@ const animalSelect = {
     criadoEm: true,
     solicitacoes: true,
 } satisfies Prisma.AnimalSelect;
+
+// Campos exibidos no site público: sem solicitações, cadastrante ou datas internas.
+const animalPublicoSelect = {
+    id: true,
+    nome: true,
+    especie: true,
+    raca: true,
+    idade: true,
+    porte: true,
+    fotoUrl: true,
+    descricao: true,
+} satisfies Prisma.AnimalSelect;
+
+export interface FiltrosAnimalPublico {
+    especie?: Especie;
+    porte?: Porte;
+}
 
 export class animalRepository {
     create(data: Prisma.AnimalCreateInput) {
@@ -34,6 +52,21 @@ export class animalRepository {
         return prisma.animal.findUnique({
             where: { id },
             select: animalSelect,
+        });
+    }
+
+    findDisponiveis(filtros: FiltrosAnimalPublico) {
+        return prisma.animal.findMany({
+            where: { status: StatusAnimal.DISPONIVEL, ...filtros },
+            select: animalPublicoSelect,
+            orderBy: { criadoEm: "desc" },
+        });
+    }
+
+    findStatusById(id: string) {
+        return prisma.animal.findUnique({
+            where: { id },
+            select: { id: true, status: true },
         });
     }
 
