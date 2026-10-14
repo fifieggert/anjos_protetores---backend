@@ -14,11 +14,26 @@ const solicitacaoAdocaoSelect = {
     termo: true,
 } satisfies Prisma.SolicitacaoAdocaoSelect;
 
+// Resposta do formulário público: só confirma o registro, sem dados internos.
+const solicitacaoPublicaSelect = {
+    id: true,
+    status: true,
+    criadoEm: true,
+    animal: { select: { id: true, nome: true } },
+} satisfies Prisma.SolicitacaoAdocaoSelect;
+
 export class solicitacaoAdocaoRepository {
     create(data: Prisma.SolicitacaoAdocaoCreateInput) {
         return prisma.solicitacaoAdocao.create({
             data,
             select: solicitacaoAdocaoSelect,
+        });
+    }
+
+    createPublica(data: Prisma.SolicitacaoAdocaoCreateInput) {
+        return prisma.solicitacaoAdocao.create({
+            data,
+            select: solicitacaoPublicaSelect,
         });
     }
 
