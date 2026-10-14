@@ -1,12 +1,12 @@
 import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 
-const usuarioSelect = {
+// Campos públicos do usuário: nunca inclua senhaHash aqui.
+export const usuarioSelect = {
     id: true,
     nome: true,
     cpf: true,
     email: true,
-    senhaHash: true,
     perfil: true,
     ativo: true,
     criadoEm: true,
@@ -37,6 +37,15 @@ export class usuarioRepository {
     findByEmail(email: string) {
         return prisma.usuario.findUnique({
             where: { email },
+            select: usuarioSelect,
+        });
+    }
+
+    // Uso exclusivo do login: retorna o senhaHash para comparação.
+    findByEmailComSenha(email: string) {
+        return prisma.usuario.findUnique({
+            where: { email },
+            select: { ...usuarioSelect, senhaHash: true },
         });
     }
 

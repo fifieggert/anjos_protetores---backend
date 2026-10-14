@@ -1,12 +1,23 @@
 import type { Request, Response } from "express";
 import { usuarioRepository } from "../repository/usuarioRepository";
+import { gerarHashSenha } from "../utils/senha";
 
 const repository = new usuarioRepository();
 
 export class usuarioController {
     async create(req: Request, res: Response) {
         try {
-            const usuario = await repository.create(req.body);
+            // senhaHash nunca é aceito do cliente: a senha chega em texto no campo "senha".
+            const { senha, senhaHash: _senhaHash, ...dados } = req.body ?? {};
+
+            if (typeof senha !== "string" || senha.trim() === "") {
+                return res.status(400).json({ error: "O campo senha é obrigatório." });
+            }
+
+            const usuario = await repository.create({
+                ...dados,
+                senhaHash: await gerarHashSenha(senha),
+            });
             return res.status(201).json(usuario);
         } catch (error) {
             return res.status(500).json({ error: "Erro ao criar usuário." });
@@ -48,7 +59,16 @@ export class usuarioController {
 
     async update(req: Request, res: Response) {
         try {
-            const usuario = await repository.update(req.params.id as string, req.body);
+            const { senha, senhaHash: _senhaHash, ...dados } = req.body ?? {};
+
+            if (senha !== undefined && (typeof senha !== "string" || senha.trim() === "")) {
+                return res.status(400).json({ error: "A senha informada é inválida." });
+            }
+
+            const usuario = await repository.update(req.params.id as string, {
+                ...dados,
+                ...(senha !== undefined && { senhaHash: await gerarHashSenha(senha) }),
+            });
             return res.status(200).json(usuario);
         } catch (error) {
             return res.status(500).json({ error: "Erro ao atualizar usuário." });
