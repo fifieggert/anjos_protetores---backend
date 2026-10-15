@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PerfilUsuario } from "@prisma/client";
-import { MAX_TEXTO, paraAtualizacao, textoObrigatorio } from "./comum";
+import { MAX_TEXTO, paraAtualizacao, senhaSchema, textoObrigatorio } from "./comum";
 
 function cpfValido(cpf: string) {
     if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -24,9 +24,9 @@ const cpf = z
 const usuarioSchema = z.strictObject({
     nome: textoObrigatorio(),
     cpf,
-    email: z.string().trim().pipe(z.email().max(MAX_TEXTO)),
-    // bcrypt considera só os primeiros 72 bytes da senha
-    senha: z.string().min(8).max(72),
+    // minúsculas para o e-mail gravado ser igual ao procurado no login
+    email: z.string().trim().toLowerCase().pipe(z.email().max(MAX_TEXTO)),
+    senha: senhaSchema,
     perfil: z.enum(PerfilUsuario),
     ativo: z.boolean().optional(),
 });

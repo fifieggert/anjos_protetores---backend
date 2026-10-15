@@ -65,6 +65,17 @@ export const textoOpcional = () =>
         .transform((valor) => (valor === "" ? null : valor))
         .optional();
 
+// O bcrypt considera só os primeiros 72 bytes da senha, então o limite é em bytes
+// UTF-8, não em caracteres. Sem trim: espaços fazem parte da senha.
+export const MAX_BYTES_SENHA = 72;
+
+export const senhaSchema = z
+    .string()
+    .min(8)
+    .refine((s) => Buffer.byteLength(s, "utf8") <= MAX_BYTES_SENHA, {
+        message: "A senha deve ter no máximo 72 bytes (acentos e emojis ocupam mais de um).",
+    });
+
 export const inteiroPositivo = () => z.int().min(1);
 export const inteiroNaoNegativo = () => z.int().min(0);
 

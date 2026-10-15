@@ -4,6 +4,7 @@ import { usuarioRepository } from "../repository/usuarioRepository";
 import { compararSenha } from "../utils/senha";
 import { JWT_SECRET } from "../config/env";
 import type { TokenPayload } from "../middleware/authMiddleware";
+import type { LoginDados } from "../validators/authValidator";
 
 const repository = new usuarioRepository();
 
@@ -15,14 +16,10 @@ const HASH_FICTICIO = "$2b$10$3W3oGYGcej.vM7qlDV/nuuosWOXcwedWNe59F2xpe30JtrntTl
 
 export class authController {
     async login(req: Request, res: Response) {
-        const { email, senha } = req.body ?? {};
+        // corpo já validado e normalizado pelo validar(loginSchema)
+        const { email, senha } = req.body as LoginDados;
 
-        if (typeof email !== "string" || email.trim() === "" ||
-            typeof senha !== "string" || senha === "") {
-            return res.status(400).json({ error: "Informe e-mail e senha." });
-        }
-
-        const usuario = await repository.findByEmailComSenha(email.trim());
+        const usuario = await repository.findByEmailComSenha(email);
         const senhaConfere = await compararSenha(senha, usuario?.senhaHash ?? HASH_FICTICIO);
 
         if (!usuario || !usuario.ativo || !senhaConfere) {
