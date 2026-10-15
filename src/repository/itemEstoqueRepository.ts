@@ -12,34 +12,59 @@ const itemEstoqueSelect = {
     saidas: true,
 } satisfies Prisma.ItemEstoqueSelect;
 
+// quantidadeMinima 0 significa "sem alerta".
+function comAlerta<T extends { quantidadeAtual: number; quantidadeMinima: number }>(item: T) {
+    return {
+        ...item,
+        abaixoDoMinimo: item.quantidadeMinima > 0 && item.quantidadeAtual < item.quantidadeMinima,
+    };
+}
+
 export class itemEstoqueRepository {
-    create(data: Prisma.ItemEstoqueCreateInput) {
-        return prisma.itemEstoque.create({
+    async create(data: Prisma.ItemEstoqueCreateInput) {
+        const item = await prisma.itemEstoque.create({
             data,
             select: itemEstoqueSelect,
         });
+        return comAlerta(item);
     }
 
-    findAll() {
-        return prisma.itemEstoque.findMany({
+    async findAll() {
+        const itens = await prisma.itemEstoque.findMany({
             select: itemEstoqueSelect,
             orderBy: { criadoEm: "desc" },
         });
+        return itens.map(comAlerta);
     }
 
-    findById(id: string) {
-        return prisma.itemEstoque.findUnique({
+    // Compara as duas colunas no banco via referência de campo do Prisma.
+    async findAbaixoDoMinimo() {
+        const itens = await prisma.itemEstoque.findMany({
+            where: {
+                quantidadeMinima: { gt: 0 },
+                quantidadeAtual: { lt: prisma.itemEstoque.fields.quantidadeMinima },
+            },
+            select: itemEstoqueSelect,
+            orderBy: { nomeItem: "asc" },
+        });
+        return itens.map(comAlerta);
+    }
+
+    async findById(id: string) {
+        const item = await prisma.itemEstoque.findUnique({
             where: { id },
             select: itemEstoqueSelect,
         });
+        return item && comAlerta(item);
     }
 
-    update(id: string, data: Prisma.ItemEstoqueUpdateInput) {
-        return prisma.itemEstoque.update({
+    async update(id: string, data: Prisma.ItemEstoqueUpdateInput) {
+        const item = await prisma.itemEstoque.update({
             where: { id },
             data,
             select: itemEstoqueSelect,
         });
+        return comAlerta(item);
     }
 
     delete(id: string) {
