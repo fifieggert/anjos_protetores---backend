@@ -1,5 +1,6 @@
 import { Router } from "express";
 import authRoutes from "./authRoutes";
+import publicoRoutes from "./publicoRoutes";
 import animalRoutes from "./animalRoutes";
 import usuarioRoutes from "./usuarioRoutes";
 import itemEstoqueRoutes from "./itemEstoqueRoutes";
@@ -11,6 +12,7 @@ import termoAdocaoRoutes from "./termoAdocaoRoutes";
 const router = Router();
 
 router.use("/auth", authRoutes);
+router.use("/publico", publicoRoutes);
 router.use("/animais", animalRoutes);
 router.use("/usuarios", usuarioRoutes);
 router.use("/itens-estoque", itemEstoqueRoutes);

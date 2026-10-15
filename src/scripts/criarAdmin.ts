@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 import prisma from "../config/prisma";
 import { usuarioRepository } from "../repository/usuarioRepository";
 import { gerarHashSenha } from "../utils/senha";
+import { senhaSchema } from "../validators/comum";
 
 const { values } = parseArgs({
     options: {
@@ -21,7 +22,8 @@ const { values } = parseArgs({
 
 const nome = values.nome ?? process.env["ADMIN_NOME"];
 const cpf = values.cpf ?? process.env["ADMIN_CPF"];
-const email = values.email ?? process.env["ADMIN_EMAIL"];
+// mesma normalização do cadastro e do login
+const email = (values.email ?? process.env["ADMIN_EMAIL"])?.trim().toLowerCase();
 const senha = values.senha ?? process.env["ADMIN_SENHA"];
 
 async function main() {
@@ -30,6 +32,13 @@ async function main() {
             "Informe nome, cpf, e-mail e senha via argumentos (--nome, --cpf, --email, --senha) " +
             "ou variáveis de ambiente (ADMIN_NOME, ADMIN_CPF, ADMIN_EMAIL, ADMIN_SENHA)."
         );
+        process.exitCode = 1;
+        return;
+    }
+
+    const senhaValida = senhaSchema.safeParse(senha);
+    if (!senhaValida.success) {
+        console.error(`Senha inválida: ${senhaValida.error.issues[0]?.message}`);
         process.exitCode = 1;
         return;
     }
