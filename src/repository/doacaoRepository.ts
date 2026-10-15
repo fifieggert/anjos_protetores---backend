@@ -2,7 +2,7 @@ import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 import { usuarioSelect } from "./usuarioRepository";
 
-const doacaoSelect = {
+export const doacaoSelect = {
     id: true,
     itemId: true,
     item: true,
@@ -13,14 +13,8 @@ const doacaoSelect = {
     dataEntrada: true,
 } satisfies Prisma.DoacaoSelect;
 
+// Criar e excluir mexem no saldo do item: ficam no estoqueService, em transação.
 export class doacaoRepository {
-    create(data: Prisma.DoacaoCreateInput) {
-        return prisma.doacao.create({
-            data,
-            select: doacaoSelect,
-        });
-    }
-
     findAll() {
         return prisma.doacao.findMany({
             select: doacaoSelect,
@@ -40,12 +34,6 @@ export class doacaoRepository {
             where: { id },
             data,
             select: doacaoSelect,
-        });
-    }
-
-    delete(id: string) {
-        return prisma.doacao.delete({
-            where: { id },
         });
     }
 }

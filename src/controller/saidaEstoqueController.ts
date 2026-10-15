@@ -1,13 +1,15 @@
 import type { Request, Response } from "express";
 import { saidaEstoqueRepository } from "../repository/saidaEstoqueRepository";
+import { estoqueService } from "../service/estoqueService";
 import { usuarioLogado } from "../middleware/authMiddleware";
 
 const repository = new saidaEstoqueRepository();
+const service = new estoqueService();
 
 export class saidaEstoqueController {
     async create(req: Request, res: Response) {
-        // quem registrou vem do token, nunca do corpo
-        const saida = await repository.create({ ...req.body, usuarioId: usuarioLogado(req).id });
+        // quem registrou vem do token, nunca do corpo; o estoque do item é baixado
+        const saida = await service.registrarSaida({ ...req.body, usuarioId: usuarioLogado(req).id });
         return res.status(201).json(saida);
     }
 
@@ -25,12 +27,13 @@ export class saidaEstoqueController {
     }
 
     async update(req: Request, res: Response) {
+        // só finalidade e data (o schema recusa itemId e quantidade)
         const saida = await repository.update(req.params.id as string, req.body);
         return res.status(200).json(saida);
     }
 
     async delete(req: Request, res: Response) {
-        await repository.delete(req.params.id as string);
+        await service.excluirSaida(req.params.id as string);
         return res.status(200).send({"message": "Saída de estoque deletada com sucesso"});
     }
 }
