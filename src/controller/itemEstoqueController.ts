@@ -14,6 +14,11 @@ export class itemEstoqueController {
         return res.status(200).json(itens);
     }
 
+    async findAlertas(req: Request, res: Response) {
+        const itens = await repository.findAbaixoDoMinimo();
+        return res.status(200).json(itens);
+    }
+
     async findById(req: Request, res: Response) {
         const item = await repository.findById(req.params.id as string);
         if (!item) {

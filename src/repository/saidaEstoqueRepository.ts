@@ -2,7 +2,7 @@ import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 import { usuarioSelect } from "./usuarioRepository";
 
-const saidaEstoqueSelect = {
+export const saidaEstoqueSelect = {
     id: true,
     itemId: true,
     item: true,
@@ -13,14 +13,8 @@ const saidaEstoqueSelect = {
     dataSaida: true,
 } satisfies Prisma.SaidaEstoqueSelect;
 
+// Criar e excluir mexem no saldo do item: ficam no estoqueService, em transação.
 export class saidaEstoqueRepository {
-    create(data: Prisma.SaidaEstoqueUncheckedCreateInput) {
-        return prisma.saidaEstoque.create({
-            data,
-            select: saidaEstoqueSelect,
-        });
-    }
-
     findAll() {
         return prisma.saidaEstoque.findMany({
             select: saidaEstoqueSelect,
@@ -40,12 +34,6 @@ export class saidaEstoqueRepository {
             where: { id },
             data,
             select: saidaEstoqueSelect,
-        });
-    }
-
-    delete(id: string) {
-        return prisma.saidaEstoque.delete({
-            where: { id },
         });
     }
 }
