@@ -13,7 +13,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # Prisma
-/prisma/migrations/
 *.db
 *.db-journal
 

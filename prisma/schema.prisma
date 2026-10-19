@@ -27,7 +27,14 @@ enum Porte {
 enum StatusAnimal {
   DISPONIVEL
   EM_TRATAMENTO
+  // reservado por um interesse de adoção em andamento (só muda pelo fluxo de adoção)
+  EM_ESPERA
   ADOTADO
+}
+
+enum Sexo {
+  MACHO
+  FEMEA
 }
 
 enum CategoriaItem {
@@ -40,6 +47,7 @@ enum CategoriaItem {
 
 enum StatusSolicitacao {
   PENDENTE
+  EM_CONTATO
   APROVADA
   RECUSADA
 }
@@ -57,6 +65,7 @@ model Usuario {
   animais       Animal[]
   doacoes       Doacao[]
   saidasEstoque SaidaEstoque[]
+  termosGerados TermoAdocao[]
 }
 
 model Animal {
@@ -72,11 +81,21 @@ model Animal {
   porte       Porte
   status      StatusAnimal @default(DISPONIVEL)
   fotoUrl     String?
+  // também é a observação impressa no termo de adoção
   descricao   String?
+
+  // opcional: os animais já cadastrados não têm essa informação e não há valor padrão seguro
+  sexo            Sexo?
+  castrado        Boolean   @default(false)
+  dataCastracao   DateTime?
+  vacinado        Boolean   @default(false)
+  dosesVacina     Int?
+  dataRevacinacao DateTime?
 
   criadoEm DateTime @default(now())
 
   solicitacoes SolicitacaoAdocao[]
+  termos       TermoAdocao[]
 }
 
 model ItemEstoque {
@@ -124,32 +143,45 @@ model SaidaEstoque {
   dataSaida   DateTime @default(now())
 }
 
+// Interesse de adoção registrado no site público. Só guardamos nome e telefone
+// do interessado: o restante do contato é feito por fora do sistema.
 model SolicitacaoAdocao {
-  id               String @id @default(uuid())
+  id           String @id @default(uuid())
 
-  animalId         String
-  animal           Animal @relation(fields: [animalId], references: [id])
+  animalId     String
+  animal       Animal @relation(fields: [animalId], references: [id])
 
-  nomeInteressado  String
-  email            String
-  telefone         String
+  nome         String @db.VarChar(100)
+  // somente dígitos, com DDD (10 ou 11 dígitos)
+  telefone     String @db.VarChar(11)
 
-  status           StatusSolicitacao @default(PENDENTE)
+  status       StatusSolicitacao @default(PENDENTE)
 
-  justificativa    String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 
-  criadoEm         DateTime @default(now())
+  termos       TermoAdocao[]
 
-  termo            TermoAdocao?
+  @@index([telefone, status])
+  @@index([animalId, status])
 }
 
+// Registro de cada geração do termo de adoção (o PDF não fica guardado).
 model TermoAdocao {
-  id             String @id @default(uuid())
+  id            String @id @default(uuid())
 
-  solicitacaoId  String @unique
-  solicitacao    SolicitacaoAdocao @relation(fields: [solicitacaoId], references: [id])
+  animalId      String
+  animal        Animal @relation(fields: [animalId], references: [id])
 
-  geradoEm       DateTime @default(now())
+  // excluir a solicitação (direito de exclusão) mantém o registro do termo, sem o vínculo
+  solicitacaoId String?
+  solicitacao   SolicitacaoAdocao? @relation(fields: [solicitacaoId], references: [id], onDelete: SetNull)
 
-  urlDocumento   String
-}
+  geradoPorId   String
+  geradoPor     Usuario @relation(fields: [geradoPorId], references: [id])
+
+  geradoEm      DateTime @default(now())
+
+  assinado      Boolean   @default(false)
+  assinadoEm    DateTime?
+}

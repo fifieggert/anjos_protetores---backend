@@ -1,8 +1,10 @@
 import type { Request, Response } from "express";
 import { animalRepository } from "../repository/animalRepository";
+import { animalService } from "../service/animalService";
 import { usuarioLogado } from "../middleware/authMiddleware";
 
 const repository = new animalRepository();
+const service = new animalService();
 
 export class animalController {
     async create(req: Request, res: Response) {
@@ -28,7 +30,8 @@ export class animalController {
     }
 
     async update(req: Request, res: Response) {
-        const animal = await repository.update(req.params.id as string, req.body);
+        // regras de status (fluxo de adoção) e de castração/vacina ficam no service
+        const animal = await service.atualizar(req.params.id as string, req.body);
         return res.status(200).json(animal);
     }
 

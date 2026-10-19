@@ -1,44 +1,21 @@
 import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 
-const solicitacaoAdocaoSelect = {
+// Uso interno (ADMIN): nome e telefone nunca saem por rota pública.
+export const solicitacaoAdocaoSelect = {
     id: true,
-    animalId: true,
-    animal: true,
-    nomeInteressado: true,
-    email: true,
+    nome: true,
     telefone: true,
     status: true,
-    justificativa: true,
     criadoEm: true,
-    termo: true,
-} satisfies Prisma.SolicitacaoAdocaoSelect;
-
-// Resposta do formulário público: só confirma o registro, sem dados internos.
-const solicitacaoPublicaSelect = {
-    id: true,
-    status: true,
-    criadoEm: true,
-    animal: { select: { id: true, nome: true } },
+    atualizadoEm: true,
+    animal: { select: { id: true, nome: true, especie: true, fotoUrl: true } },
 } satisfies Prisma.SolicitacaoAdocaoSelect;
 
 export class solicitacaoAdocaoRepository {
-    create(data: Prisma.SolicitacaoAdocaoCreateInput) {
-        return prisma.solicitacaoAdocao.create({
-            data,
-            select: solicitacaoAdocaoSelect,
-        });
-    }
-
-    createPublica(data: Prisma.SolicitacaoAdocaoCreateInput) {
-        return prisma.solicitacaoAdocao.create({
-            data,
-            select: solicitacaoPublicaSelect,
-        });
-    }
-
-    findAll() {
+    findAll(filtros: Prisma.SolicitacaoAdocaoWhereInput) {
         return prisma.solicitacaoAdocao.findMany({
+            where: filtros,
             select: solicitacaoAdocaoSelect,
             orderBy: { criadoEm: "desc" },
         });
@@ -51,17 +28,11 @@ export class solicitacaoAdocaoRepository {
         });
     }
 
-    update(id: string, data: Prisma.SolicitacaoAdocaoUpdateInput) {
-        return prisma.solicitacaoAdocao.update({
+    // usado pelo registro de termo: confere a qual animal a solicitação pertence
+    findAnimalId(id: string) {
+        return prisma.solicitacaoAdocao.findUnique({
             where: { id },
-            data,
-            select: solicitacaoAdocaoSelect,
-        });
-    }
-
-    delete(id: string) {
-        return prisma.solicitacaoAdocao.delete({
-            where: { id },
+            select: { animalId: true },
         });
     }
 }

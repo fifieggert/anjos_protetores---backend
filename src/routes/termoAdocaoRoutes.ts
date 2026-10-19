@@ -7,11 +7,13 @@ import { criarTermoAdocaoSchema, atualizarTermoAdocaoSchema } from "../validator
 const router = Router();
 const controller = new termoAdocaoController();
 
-// gerar o termo de adoção é uma decisão administrativa — só o admin pode criar
-router.post("/", authMiddleware, somenteAdmin, validar(criarTermoAdocaoSchema), controller.create.bind(controller));
-router.get("/", authMiddleware, controller.findAll.bind(controller));
-router.get("/:id", authMiddleware, validar(), controller.findById.bind(controller));
-router.put("/:id", authMiddleware, somenteAdmin, validar(atualizarTermoAdocaoSchema), controller.update.bind(controller));
-router.delete("/:id", authMiddleware, somenteAdmin, validar(), controller.delete.bind(controller));
+// termos fazem parte do fluxo de adoção, que é da coordenação
+router.use(authMiddleware, somenteAdmin);
+
+router.post("/", validar(criarTermoAdocaoSchema), controller.create.bind(controller));
+router.get("/", controller.findAll.bind(controller));
+router.get("/:id", validar(), controller.findById.bind(controller));
+router.put("/:id", validar(atualizarTermoAdocaoSchema), controller.update.bind(controller));
+router.delete("/:id", validar(), controller.delete.bind(controller));
 
 export default router;
