@@ -1,16 +1,20 @@
 import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 
+// Sem dados do interessado: só o vínculo com a solicitação.
 const termoAdocaoSelect = {
     id: true,
+    animalId: true,
+    animal: { select: { id: true, nome: true } },
     solicitacaoId: true,
-    solicitacao: true,
+    geradoPor: { select: { id: true, nome: true } },
     geradoEm: true,
-    urlDocumento: true,
+    assinado: true,
+    assinadoEm: true,
 } satisfies Prisma.TermoAdocaoSelect;
 
 export class termoAdocaoRepository {
-    create(data: Prisma.TermoAdocaoCreateInput) {
+    create(data: Prisma.TermoAdocaoUncheckedCreateInput) {
         return prisma.termoAdocao.create({
             data,
             select: termoAdocaoSelect,
@@ -27,13 +31,6 @@ export class termoAdocaoRepository {
     findById(id: string) {
         return prisma.termoAdocao.findUnique({
             where: { id },
-            select: termoAdocaoSelect,
-        });
-    }
-
-    findBySolicitacaoId(solicitacaoId: string) {
-        return prisma.termoAdocao.findUnique({
-            where: { solicitacaoId },
             select: termoAdocaoSelect,
         });
     }

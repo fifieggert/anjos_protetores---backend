@@ -43,3 +43,20 @@ export function validar(schema?: z.ZodType) {
         return next();
     };
 }
+
+// Valida a query string. Como no Express 5 req.query é somente leitura, a versão
+// validada fica em res.locals.consulta.
+export function validarConsulta(schema: z.ZodType) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const consulta = schema.safeParse(req.query);
+
+        if (!consulta.success) {
+            const campos: Campos = {};
+            adicionarErros(campos, consulta.error.issues);
+            return res.status(400).json({ error: "Dados inválidos.", campos });
+        }
+
+        res.locals["consulta"] = consulta.data;
+        return next();
+    };
+}

@@ -2,7 +2,9 @@ import prisma from "../config/prisma";
 import { Prisma, StatusAnimal } from "@prisma/client";
 import type { Especie, Porte } from "@prisma/client";
 
-const animalSelect = {
+// Sem as solicitações: nome e telefone dos interessados só aparecem nas rotas de
+// solicitações de adoção, que são exclusivas do ADMIN.
+export const animalSelect = {
     id: true,
     nome: true,
     especie: true,
@@ -12,8 +14,13 @@ const animalSelect = {
     status: true,
     fotoUrl: true,
     descricao: true,
+    sexo: true,
+    castrado: true,
+    dataCastracao: true,
+    vacinado: true,
+    dosesVacina: true,
+    dataRevacinacao: true,
     criadoEm: true,
-    solicitacoes: true,
 } satisfies Prisma.AnimalSelect;
 
 // Campos exibidos no site público: sem solicitações, cadastrante ou datas internas.
@@ -26,6 +33,8 @@ const animalPublicoSelect = {
     porte: true,
     fotoUrl: true,
     descricao: true,
+    sexo: true,
+    castrado: true,
 } satisfies Prisma.AnimalSelect;
 
 export interface FiltrosAnimalPublico {
@@ -63,18 +72,10 @@ export class animalRepository {
         });
     }
 
-    findStatusById(id: string) {
+    exists(id: string) {
         return prisma.animal.findUnique({
             where: { id },
-            select: { id: true, status: true },
-        });
-    }
-
-    update(id: string, data: Prisma.AnimalUpdateInput) {
-        return prisma.animal.update({
-            where: { id },
-            data,
-            select: animalSelect,
+            select: { id: true },
         });
     }
 

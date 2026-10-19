@@ -86,6 +86,14 @@ export const dataOpcional = () =>
         .transform((valor) => new Date(valor))
         .optional();
 
+// Campos DateTime? do schema: como dataOpcional, mas aceita null para limpar o valor.
+export const dataOpcionalNula = () =>
+    z
+        .union([z.iso.datetime({ offset: true }), z.iso.date()], { error: NOMES_FORMATO["datetime"] })
+        .transform((valor) => new Date(valor))
+        .nullable()
+        .optional();
+
 // PUT: todos os campos opcionais, mas o corpo não pode vir vazio.
 export function paraAtualizacao<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
     return schema

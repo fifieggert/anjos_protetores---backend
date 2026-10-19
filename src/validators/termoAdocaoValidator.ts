@@ -1,12 +1,22 @@
 import { z } from "zod";
-import { MAX_TEXTO, idSchema, paraAtualizacao } from "./comum";
+import { dataOpcional, idSchema } from "./comum";
 
-const urlDocumento = z.url({ protocol: /^https?$/ }).max(MAX_TEXTO);
-
+// Registro da geração do termo. Quem gerou vem do token; o PDF não é guardado.
 export const criarTermoAdocaoSchema = z.strictObject({
-    solicitacaoId: idSchema,
-    urlDocumento,
+    animalId: idSchema,
+    solicitacaoId: idSchema.optional(),
 });
 
-// A solicitação vinculada ao termo não muda.
-export const atualizarTermoAdocaoSchema = paraAtualizacao(z.strictObject({ urlDocumento }));
+// Marcar o termo como assinado (ou desfazer). Sem assinadoEm, vale o momento atual.
+export const atualizarTermoAdocaoSchema = z
+    .strictObject({
+        assinado: z.boolean(),
+        assinadoEm: dataOpcional(),
+    })
+    .refine((dados) => dados.assinado || dados.assinadoEm === undefined, {
+        path: ["assinadoEm"],
+        message: "Informe a data de assinatura só quando o termo estiver assinado.",
+    });
+
+export type DadosNovoTermo = z.output<typeof criarTermoAdocaoSchema>;
+export type DadosAssinaturaTermo = z.output<typeof atualizarTermoAdocaoSchema>;
