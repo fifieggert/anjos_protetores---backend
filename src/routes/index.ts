@@ -8,6 +8,7 @@ import doacaoRoutes from "./doacaoRoutes";
 import saidaEstoqueRoutes from "./saidaEstoqueRoutes";
 import solicitacaoAdocaoRoutes from "./solicitacaoAdocaoRoutes";
 import termoAdocaoRoutes from "./termoAdocaoRoutes";
+import eventoRoutes from "./eventoRoutes";
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use("/doacoes", doacaoRoutes);
 router.use("/saidas-estoque", saidaEstoqueRoutes);
 router.use("/solicitacoes-adocao", solicitacaoAdocaoRoutes);
 router.use("/termos-adocao", termoAdocaoRoutes);
+router.use("/eventos", eventoRoutes);
 
 export default router;

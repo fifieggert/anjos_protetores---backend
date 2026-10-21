@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { diaNoFuso } from "../utils/datas";
 
 // Limite das colunas String do Prisma no MySQL (VARCHAR(191)).
 export const MAX_TEXTO = 191;
@@ -93,6 +94,18 @@ export const dataOpcionalNula = () =>
         .transform((valor) => new Date(valor))
         .nullable()
         .optional();
+
+// Data só de dia (colunas @db.Date). Aceita AAAA-MM-DD ou data e hora com fuso (o
+// frontend envia o dia ao meio-dia local) e devolve o AAAA-MM-DD: com hora, vale o dia
+// no fuso do abrigo, para o dia gravado ser o mesmo que a pessoa escolheu.
+export const diaObrigatorio = () =>
+    z
+        .union([z.iso.date(), z.iso.datetime({ offset: true })], { error: NOMES_FORMATO["datetime"] })
+        .transform((valor) => (valor.length === 10 ? valor : diaNoFuso(new Date(valor))));
+
+// Horário "HH:mm" (00:00 a 23:59).
+export const horarioSchema = () =>
+    z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: "Horário inválido. Use o formato HH:mm, ex.: 14:30." });
 
 // PUT: todos os campos opcionais, mas o corpo não pode vir vazio.
 export function paraAtualizacao<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
