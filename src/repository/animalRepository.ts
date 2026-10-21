@@ -35,6 +35,7 @@ const animalPublicoSelect = {
     descricao: true,
     sexo: true,
     castrado: true,
+    vacinado: true,
 } satisfies Prisma.AnimalSelect;
 
 export interface FiltrosAnimalPublico {

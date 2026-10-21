@@ -66,6 +66,7 @@ model Usuario {
   doacoes       Doacao[]
   saidasEstoque SaidaEstoque[]
   termosGerados TermoAdocao[]
+  eventos       Evento[]
 }
 
 model Animal {
@@ -152,7 +153,7 @@ model SolicitacaoAdocao {
   animal       Animal @relation(fields: [animalId], references: [id])
 
   nome         String @db.VarChar(100)
-  // somente dígitos, com DDD (10 ou 11 dígitos)
+  // somente dígitos: celular com DDD (11 dígitos)
   telefone     String @db.VarChar(11)
 
   status       StatusSolicitacao @default(PENDENTE)
@@ -184,4 +185,28 @@ model TermoAdocao {
 
   assinado      Boolean   @default(false)
   assinadoEm    DateTime?
-}
+}
+
+// Evento do abrigo exibido no site público (feira de adoção, bazar, mutirão...).
+model Evento {
+  id            String @id @default(uuid())
+
+  titulo        String  @db.VarChar(100)
+  descricao     String? @db.VarChar(1000)
+  // somente o dia: gravado e devolvido como AAAA-MM-DD, sem hora nem fuso
+  data          DateTime @db.Date
+  // "HH:mm"; o fim, quando informado, é depois do início
+  horarioInicio String  @db.VarChar(5)
+  horarioFim    String? @db.VarChar(5)
+  local         String
+  imagemUrl     String? @db.VarChar(500)
+
+  // quem cadastrou vem do token, nunca do corpo
+  criadoPorId   String
+  criadoPor     Usuario @relation(fields: [criadoPorId], references: [id])
+
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  @@index([data, horarioInicio])
+}

@@ -2,11 +2,18 @@ import type { Request, Response } from "express";
 import { Especie, Porte } from "@prisma/client";
 import { animalRepository } from "../repository/animalRepository";
 import type { FiltrosAnimalPublico } from "../repository/animalRepository";
+import { eventoRepository } from "../repository/eventoRepository";
+import { estatisticaRepository } from "../repository/estatisticaRepository";
 import { adocaoService } from "../service/adocaoService";
 import type { DadosInteresse } from "../validators/solicitacaoAdocaoValidator";
+import { diaParaBanco, hoje } from "../utils/datas";
 
 const repository = new animalRepository();
+const eventos = new eventoRepository();
+const estatisticas = new estatisticaRepository();
 const adocao = new adocaoService();
+
+const MAX_EVENTOS_PUBLICOS = 12;
 
 // Lê um filtro opcional da query string e confere se é um valor válido do enum.
 // Retorna undefined se não veio e null se veio inválido.
@@ -36,6 +43,16 @@ export class publicoController {
 
         const animais = await repository.findDisponiveis(filtros);
         return res.status(200).json(animais);
+    }
+
+    // Eventos de hoje em diante: o de hoje continua aparecendo durante todo o dia (fuso do abrigo).
+    async listarEventos(_req: Request, res: Response) {
+        const lista = await eventos.findPublicos(diaParaBanco(hoje()), MAX_EVENTOS_PUBLICOS);
+        return res.status(200).json(lista);
+    }
+
+    async estatisticas(_req: Request, res: Response) {
+        return res.status(200).json(await estatisticas.totaisPublicos());
     }
 
     // "Tenho interesse": reserva o animal (EM_ESPERA) e registra a solicitação PENDENTE.
