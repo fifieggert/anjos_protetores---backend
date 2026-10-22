@@ -21,15 +21,37 @@ const cpf = z
     .transform((valor) => valor.replace(/\D/g, ""))
     .refine(cpfValido, { message: "CPF inválido." });
 
+// Mensagem própria para perfil desconhecido (ex.: o antigo FUNCIONARIO); ausente usa a padrão.
+const perfil = z.enum(PerfilUsuario, {
+    error: (issue) =>
+        issue.input === undefined
+            ? undefined
+            : `Perfil inválido. Perfis válidos: ${Object.values(PerfilUsuario).join(", ")}.`,
+});
+
 const usuarioSchema = z.strictObject({
     nome: textoObrigatorio(),
     cpf,
     // minúsculas para o e-mail gravado ser igual ao procurado no login
     email: z.string().trim().toLowerCase().pipe(z.email().max(MAX_TEXTO)),
     senha: senhaSchema,
-    perfil: z.enum(PerfilUsuario),
+    perfil,
     ativo: z.boolean().optional(),
 });
 
 export const criarUsuarioSchema = usuarioSchema;
 export const atualizarUsuarioSchema = paraAtualizacao(usuarioSchema);
+
+// Troca da própria senha. A nova segue a mesma regra do cadastro (senhaSchema). A atual
+// não passa pela regra de força (pode ser de antes dela), só por um teto de tamanho.
+export const trocarSenhaSchema = z
+    .strictObject({
+        senhaAtual: z.string().min(1, { error: "Informe a senha atual." }).max(200),
+        novaSenha: senhaSchema,
+    })
+    .refine((dados) => dados.novaSenha !== dados.senhaAtual, {
+        path: ["novaSenha"],
+        message: "A nova senha deve ser diferente da atual.",
+    });
+
+export type DadosTrocaSenha = z.output<typeof trocarSenhaSchema>;

@@ -10,3 +10,14 @@ export const limiteInteresses = rateLimit({
     legacyHeaders: false,
     message: { error: "Muitas tentativas de registrar interesse. Tente novamente mais tarde." },
 });
+
+// Troca da própria senha: freia quem tenta adivinhar a senha atual com um token roubado.
+// Só as respostas com erro contam (skipSuccessfulRequests), então quem acerta não é travado.
+export const limiteTrocaSenha = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    skipSuccessfulRequests: true,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "Muitas tentativas de trocar a senha. Tente novamente em alguns minutos." },
+});
