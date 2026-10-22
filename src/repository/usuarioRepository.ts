@@ -49,6 +49,14 @@ export class usuarioRepository {
         });
     }
 
+    // Uso exclusivo da troca de senha: retorna o senhaHash para comparação.
+    findByIdComSenha(id: string) {
+        return prisma.usuario.findUnique({
+            where: { id },
+            select: { id: true, ativo: true, senhaHash: true },
+        });
+    }
+
     update(id: string, data: Prisma.UsuarioUpdateInput) {
         return prisma.usuario.update({
             where: { id },

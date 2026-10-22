@@ -2,10 +2,21 @@ import { Router } from "express";
 import { usuarioController } from "../controller/usuarioController";
 import { authMiddleware, somenteAdmin } from "../middleware/authMiddleware";
 import { validar } from "../middleware/validar";
-import { criarUsuarioSchema, atualizarUsuarioSchema } from "../validators/usuarioValidator";
+import { limiteTrocaSenha } from "../middleware/limiteRequisicoes";
+import { criarUsuarioSchema, atualizarUsuarioSchema, trocarSenhaSchema } from "../validators/usuarioValidator";
 
 const router = Router();
 const controller = new usuarioController();
+
+// Própria senha: qualquer perfil logado. Fica ANTES do router.use(somenteAdmin) e das
+// rotas "/:id" para não ser barrada nem confundida com elas.
+router.patch(
+    "/me/senha",
+    authMiddleware,
+    limiteTrocaSenha,
+    validar(trocarSenhaSchema),
+    controller.trocarSenha.bind(controller),
+);
 
 // gestão de usuários é exclusiva da coordenação
 router.use(authMiddleware, somenteAdmin);
