@@ -1,13 +1,15 @@
 import { z } from "zod";
-import { diaObrigatorio, horarioSchema, paraAtualizacao, textoObrigatorio } from "./comum";
+import { MAX_TEXTO, diaObrigatorio, horarioSchema, paraAtualizacao } from "./comum";
 
+const MIN_TITULO = 3;
 const MAX_TITULO = 100;
+const MIN_LOCAL = 2;
 const MAX_DESCRICAO = 1000;
 const MAX_URL_IMAGEM = 500;
 
 // criadoPor não é aceito do cliente: vem do token (req.usuario).
 const eventoSchema = z.strictObject({
-    titulo: z.string().trim().min(1).max(MAX_TITULO),
+    titulo: z.string().trim().min(MIN_TITULO, { error: `O título deve ter no mínimo ${MIN_TITULO} caracteres.` }).max(MAX_TITULO),
     descricao: z
         .string()
         .trim()
@@ -18,7 +20,7 @@ const eventoSchema = z.strictObject({
     data: diaObrigatorio(),
     horarioInicio: horarioSchema(),
     horarioFim: horarioSchema().nullable().optional(),
-    local: textoObrigatorio(),
+    local: z.string().trim().min(MIN_LOCAL, { error: `O local deve ter no mínimo ${MIN_LOCAL} caracteres.` }).max(MAX_TEXTO),
     // mesma regra da fotoUrl do animal: só http ou https
     imagemUrl: z.url({ protocol: /^https?$/ }).max(MAX_URL_IMAGEM).nullable().optional(),
 });

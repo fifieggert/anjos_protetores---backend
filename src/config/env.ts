@@ -47,3 +47,12 @@ function origensCors(): string[] {
 
 export const JWT_SECRET = variavelObrigatoria("JWT_SECRET");
 export const CORS_ORIGINS = origensCors();
+
+// Opcionais, usadas no termo de adoção em PDF. Sem elas, o termo sai com a linha em branco.
+function variavelOpcional(nome: string): string | null {
+    const valor = process.env[nome]?.trim();
+    return valor ? valor : null;
+}
+
+export const ABRIGO_CIDADE = variavelOpcional("ABRIGO_CIDADE");
+export const ABRIGO_TELEFONE = variavelOpcional("ABRIGO_TELEFONE");
