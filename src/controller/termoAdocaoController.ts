@@ -1,39 +1,44 @@
 import type { Request, Response } from "express";
 import { termoAdocaoRepository } from "../repository/termoAdocaoRepository";
-import { animalRepository } from "../repository/animalRepository";
-import { solicitacaoAdocaoRepository } from "../repository/solicitacaoAdocaoRepository";
+import { termoAdocaoService } from "../service/termoAdocaoService";
+import { gerarTermoPdf, nomeArquivoTermo } from "../service/termoPdfService";
 import { usuarioLogado } from "../middleware/authMiddleware";
+import { ABRIGO_CIDADE, ABRIGO_TELEFONE } from "../config/env";
 import type { DadosAssinaturaTermo, DadosNovoTermo } from "../validators/termoAdocaoValidator";
 
 const repository = new termoAdocaoRepository();
-const animais = new animalRepository();
-const solicitacoes = new solicitacaoAdocaoRepository();
+const service = new termoAdocaoService();
 
 export class termoAdocaoController {
-    // Registra que o termo foi gerado (a geração do PDF é outra tarefa).
+    // Registra a geração do termo. Idempotente: se já há um termo não assinado para o mesmo
+    // animal e a mesma solicitação, devolve esse (200) em vez de criar outro (201).
     async create(req: Request, res: Response) {
         const { animalId, solicitacaoId } = req.body as DadosNovoTermo;
-
-        if (!(await animais.exists(animalId))) {
-            return res.status(404).json({ error: "Animal não encontrado." });
-        }
-        if (solicitacaoId) {
-            const solicitacao = await solicitacoes.findAnimalId(solicitacaoId);
-            if (!solicitacao) {
-                return res.status(404).json({ error: "Solicitação de adoção não encontrada." });
-            }
-            if (solicitacao.animalId !== animalId) {
-                return res.status(409).json({ error: "A solicitação informada é de outro animal." });
-            }
-        }
-
         // quem gerou vem do token, nunca do corpo
-        const termo = await repository.create({
+        const { termo, criado } = await service.registrarGeracao({
             animalId,
             ...(solicitacaoId ? { solicitacaoId } : {}),
             geradoPorId: usuarioLogado(req).id,
         });
-        return res.status(201).json(termo);
+        return res.status(criado ? 201 : 200).json(termo);
+    }
+
+    // PDF montado com os dados ATUAIS do banco. Tem nome e telefone do interessado:
+    // não fica em cache nem em log.
+    async pdf(req: Request, res: Response) {
+        const termo = await repository.findParaPdf(req.params.id as string);
+        if (!termo) {
+            return res.status(404).json({ error: "Termo de adoção não encontrado." });
+        }
+
+        const pdf = await gerarTermoPdf(termo, { cidade: ABRIGO_CIDADE, telefoneAbrigo: ABRIGO_TELEFONE });
+        res.set({
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${nomeArquivoTermo(termo.animal.nome)}"`,
+            "Content-Length": String(pdf.length),
+            "Cache-Control": "no-store",
+        });
+        return res.status(200).send(pdf);
     }
 
     async findAll(req: Request, res: Response) {

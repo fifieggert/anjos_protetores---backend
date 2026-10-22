@@ -27,12 +27,4 @@ export class solicitacaoAdocaoRepository {
             select: solicitacaoAdocaoSelect,
         });
     }
-
-    // usado pelo registro de termo: confere a qual animal a solicitação pertence
-    findAnimalId(id: string) {
-        return prisma.solicitacaoAdocao.findUnique({
-            where: { id },
-            select: { animalId: true },
-        });
-    }
 }
