@@ -1,0 +1,144 @@
+# CI do backend: qualidade (lint, tipos, testes com cobertura, build), build da imagem
+# Docker (sem push) e análise no SonarCloud (só quando o segredo SONAR_TOKEN existir).
+# O deploy (CD) fica para outra etapa. Detalhes em docs/deploy-backend.md.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+# Um novo push na mesma branch/PR cancela a execução anterior.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: Qualidade (lint, tipos, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node (versão do .nvmrc, a mesma do Dockerfile)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # O package-lock.json foi gerado no Windows sem as entradas dos binários nativos do
+      # rolldown (usado pelo vitest), por um bug do npm com optionalDependencies. Instala só
+      # o binário de Linux, na versão já travada, sem alterar package.json nem o lockfile.
+      # Pode ser removido depois que o lockfile for regenerado (ver docs/deploy-backend.md).
+      - name: Binário nativo do rolldown (Linux)
+        run: |
+          versao="$(node -p "require('rolldown/package.json').version")"
+          npm install --no-save "@rolldown/binding-linux-x64-gnu@${versao}"
+
+      - name: Prisma client
+        run: npm run prisma:generate
+        env:
+          # falso: o generate não conecta ao banco, mas o prisma.config.ts exige a variável
+          DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Testes com cobertura (mínimo de 75%)
+        run: npm run test:cov
+
+      - name: Build
+        run: npm run build
+
+      - name: Publicar cobertura
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: error
+
+  docker:
+    name: Imagem Docker (build, sem push)
+    needs: qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build da imagem
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: anjos-protetores-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Sobe a imagem sem banco, com variáveis falsas: liveness tem que dar 200 e readiness 503.
+      - name: Testar a imagem (rotas de saúde)
+        run: |
+          docker run -d --name api-ci -p 4000:4000 \
+            -e JWT_SECRET=segredo-falso-do-ci \
+            -e DATABASE_URL=mysql://ci:ci@127.0.0.1:1/ci \
+            anjos-protetores-backend:ci
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:4000/health > /dev/null && break
+            sleep 1
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/health)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/health/ready)" = "503"
+          test "$(docker exec api-ci id -un)" = "node"
+          docker exec api-ci test -f dist/assets/logo-anjos.png
+
+      - name: Logs do container
+        if: ${{ always() }}
+        run: docker logs api-ci || true
+
+  sonar:
+    name: SonarCloud
+    needs: qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Vazio enquanto o segredo não for criado no repositório: os passos são pulados.
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Aviso (SONAR_TOKEN não configurado)
+        if: ${{ env.SONAR_TOKEN == '' }}
+        run: echo "::notice::SONAR_TOKEN não configurado; análise do SonarCloud pulada."
+
+      - name: Checkout (histórico completo)
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Baixar cobertura
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage
+          path: coverage/
+
+      - name: Análise SonarCloud
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0

@@ -1,0 +1,56 @@
+# SOMENTE PARA DESENVOLVIMENTO LOCAL. Isto NÃO é o ambiente de produção: as senhas abaixo
+# são de teste, a porta do MySQL fica aberta na máquina e as migrations rodam a cada subida.
+#
+#   docker compose up --build      sobe MySQL + API (http://localhost:4000)
+#   docker compose down            para tudo (os dados ficam no volume)
+#   docker compose down -v         para e apaga também os dados do MySQL
+#
+# Variáveis da API: .env.docker.example (valores falsos) e, se existir, .env.docker
+# (cópia local, fora do git). Detalhes em docs/deploy-backend.md.
+name: anjos-protetores
+
+services:
+  mysql:
+    image: mysql:8.4
+    # O adapter MariaDB do Prisma, sem TLS, não consegue fazer o primeiro login com o
+    # caching_sha2_password padrão do MySQL 8. Só neste banco local o usuário da aplicação
+    # usa mysql_native_password. Em produção, prefira conexão com TLS.
+    command: ["--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
+    environment:
+      MYSQL_DATABASE: anjos_protetores
+      MYSQL_USER: anjos
+      # padrões claramente de teste; troque via variável de ambiente se quiser
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-senha_local_de_teste}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_local_de_teste}
+    ports:
+      # 3307 na máquina para não conflitar com um MySQL local na 3306
+      - "3307:3306"
+    volumes:
+      - mysql-dados:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    build: .
+    env_file:
+      - path: .env.docker.example
+      - path: .env.docker
+        required: false
+    environment:
+      # mesmo usuário/senha do serviço mysql acima (host "mysql" na rede do compose)
+      DATABASE_URL: mysql://anjos:${MYSQL_PASSWORD:-senha_local_de_teste}@mysql:3306/anjos_protetores
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    # aplica as migrations e sobe a API; "exec" deixa o node como processo principal
+    # para receber o SIGTERM do "docker compose down"
+    command: ["sh", "-c", "npm run migrate:deploy && exec node dist/server.js"]
+
+volumes:
+  mysql-dados:
