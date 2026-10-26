@@ -1,0 +1,10 @@
+{
+  // Checagem de tipos dos testes (npm run typecheck). Não gera arquivos.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
