@@ -127,9 +127,12 @@ O arquivo é `.github/workflows/ci.yml`. Ele roda em pull requests e pushes para
 2. **docker**: build da imagem (sem push, com cache do buildx). Depois sobe a imagem sem banco
    e confere que `/health` dá 200, `/health/ready` dá 503, o usuário é `node` e a logo está em
    `dist/assets`.
-3. **sonar**: análise no SonarCloud com o `coverage/lcov.info`. Só roda se o segredo
-   `SONAR_TOKEN` existir. Antes, preencha `sonar.organization` e `sonar.projectKey` no
-   `sonar-project.properties`.
+3. **sonar**: análise no SonarCloud (organização `fifieggert`, projeto
+   `fifieggert_anjos_protetores---backend`, configurados no `sonar-project.properties`) com o
+   `coverage/lcov.info` baixado do job de qualidade. A análise automática do SonarCloud fica
+   desligada, porque a análise é feita pelo CI. Só roda se o segredo `SONAR_TOKEN` existir; sem ele
+   (por exemplo, em PRs vindas de forks ou abertas pelo Dependabot), os passos são pulados com um aviso e o
+   job fica verde.
 
 As actions são só oficiais (GitHub, Docker, SonarSource) e ficam fixadas por SHA, com a versão
 em comentário.
