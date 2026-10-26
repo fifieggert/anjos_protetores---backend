@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { lerTrustProxy } from "../utils/trustProxy";
 
 function encerrarComErro(mensagem: string): never {
     console.error(`[config] ${mensagem}`);
@@ -45,8 +46,18 @@ function origensCors(): string[] {
     return origens;
 }
 
+function trustProxy(): number | false {
+    try {
+        return lerTrustProxy(process.env["TRUST_PROXY"]);
+    } catch (erro) {
+        encerrarComErro((erro as Error).message);
+    }
+}
+
 export const JWT_SECRET = variavelObrigatoria("JWT_SECRET");
 export const CORS_ORIGINS = origensCors();
+// Atrás do Nginx/load balancer (produção): número de proxies. Ver utils/trustProxy.ts.
+export const TRUST_PROXY = trustProxy();
 
 // Opcionais, usadas no termo de adoção em PDF. Sem elas, o termo sai com a linha em branco.
 function variavelOpcional(nome: string): string | null {

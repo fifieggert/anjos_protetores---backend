@@ -1,0 +1,36 @@
+# Gerados ou instalados dentro da imagem
+node_modules
+dist
+coverage
+generated
+
+# Segredos e configurações locais (nenhum .env entra na imagem)
+.env
+.env.*
+
+# Git, CI e editores
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Testes e ferramentas de desenvolvimento
+src/__tests__
+vitest.config.mts
+tsconfig.test.json
+.oxlintrc.json
+sonar-project.properties
+
+# Docker e documentação
+Dockerfile
+.dockerignore
+docker-compose.yml
+docs
+*.md
+
+# Logs e sistema
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

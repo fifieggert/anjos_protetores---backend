@@ -6,6 +6,7 @@ build/
 # Variáveis de Ambiente (Segurança)
 .env
 .env.local
+.env.docker
 
 # Logs
 npm-debug.log*
