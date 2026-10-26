@@ -8,7 +8,11 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "criar-admin": "tsx src/scripts/criarAdmin.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "lint": "oxlint src",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "repository": {
     "type": "git",
@@ -47,8 +51,14 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^26.5.0",
     "@types/pdfkit": "^0.17.7",
+    "@types/supertest": "^7.2.1",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.5",
+    "oxlint": "^1.89.0",
+    "supertest": "^7.3.1",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "vitest-mock-extended": "^5.1.1"
   }
 }
