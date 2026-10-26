@@ -57,8 +57,15 @@ describe("criarEventoSchema", () => {
         expect(criarEventoSchema.parse({ ...valido, data: "2026-11-14T00:30:00-03:00" }).data).toBe("2026-11-14");
     });
 
-    it.each(["14/11/2026", "2026-13-01", "amanhã"])("recusa data inválida %s", (data) => {
-        expect(errosDe(criarEventoSchema, { ...valido, data })).toHaveProperty("data");
+    it.each(["14/11/2026", "2026-13-01", "amanhã", "", 20261114])("recusa data inválida %s com a mensagem do formato", (data) => {
+        expect(errosDe(criarEventoSchema, { ...valido, data })).toEqual({
+            data: "Data inválida. Use o formato AAAA-MM-DD ou AAAA-MM-DDTHH:MM:SSZ.",
+        });
+    });
+
+    it("data ausente diz que o campo é obrigatório", () => {
+        const { data: _data, ...semData } = valido;
+        expect(errosDe(criarEventoSchema, semData)).toEqual({ data: "Campo obrigatório." });
     });
 
     it("descrição vazia vira null e criadoPorId não é aceito", () => {

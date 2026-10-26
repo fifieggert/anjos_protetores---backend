@@ -73,13 +73,6 @@ export class animalRepository {
         });
     }
 
-    exists(id: string) {
-        return prisma.animal.findUnique({
-            where: { id },
-            select: { id: true },
-        });
-    }
-
     delete(id: string) {
         return prisma.animal.delete({
             where: { id },

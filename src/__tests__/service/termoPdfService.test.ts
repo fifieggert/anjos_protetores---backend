@@ -100,14 +100,40 @@ describe("gerarTermoPdf", () => {
         expect(conteudo).toContain("Telefone: ______________________");
     });
 
-    // BUG conhecido (não corrigido): a API aceita dataCastracao "AAAA-MM-DD", que vira
-    // meia-noite UTC; o PDF converte para o fuso de Brasília e imprime o dia anterior
-    // (09/03), enquanto o frontend (diaDaApi) mostra 10/03. Quando corrigir, troque it.fails por it.
-    it.fails("data de castração enviada como AAAA-MM-DD sai no mesmo dia no PDF", async () => {
-        const texto = capturarTextos();
-        await gerarTermoPdf(termo({ castrado: true, dataCastracao: new Date("2026-03-10T00:00:00.000Z") }), opcoes);
-        expect(texto()).toContain("O animal já foi castrado em 10/03/2026.");
-    });
+    // "AAAA-MM-DD" enviado direto à API é gravado à meia-noite UTC; o frontend envia o dia
+    // ao meio-dia de Brasília. Nos dois casos o PDF mostra o mesmo dia, qualquer que seja o
+    // fuso da máquina. O rodapé (data de geração) continua no fuso de Brasília.
+    it.each(["UTC", "America/Sao_Paulo", "Asia/Tokyo", "Pacific/Honolulu"])(
+        "datas de castração e revacinação saem no dia gravado com TZ=%s",
+        async (fuso) => {
+            const fusoOriginal = process.env["TZ"];
+            process.env["TZ"] = fuso;
+            try {
+                // 01:30 UTC de 26/10 ainda é 25/10 em Brasília: o rodapé não muda para 26
+                vi.setSystemTime(new Date("2026-10-26T01:30:00.000Z"));
+                for (const dataCastracao of [new Date("2026-03-10T00:00:00.000Z"), new Date("2026-03-10T15:00:00.000Z")]) {
+                    const texto = capturarTextos();
+                    await gerarTermoPdf(
+                        termo({
+                            castrado: true,
+                            dataCastracao,
+                            vacinado: true,
+                            dataRevacinacao: new Date("2027-01-01T00:00:00.000Z"),
+                        }),
+                        opcoes,
+                    );
+                    const conteudo = texto();
+                    expect(conteudo).toContain("O animal já foi castrado em 10/03/2026.");
+                    expect(conteudo).toContain("SIM, em 10/03/2026");
+                    expect(conteudo).toContain("revacinação em 01/01/2027");
+                    expect(conteudo).toContain("Documento gerado pelo sistema em 25/10/2026");
+                    vi.restoreAllMocks();
+                }
+            } finally {
+                process.env["TZ"] = fusoOriginal;
+            }
+        },
+    );
 
     it("telefone fora do formato sai como está", async () => {
         const texto = capturarTextos();

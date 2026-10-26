@@ -64,10 +64,4 @@ export class usuarioRepository {
             select: usuarioSelect,
         });
     }
-
-    delete(id: string) {
-        return prisma.usuario.delete({
-            where: { id },
-        });
-    }
 }

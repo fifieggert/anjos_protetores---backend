@@ -3,7 +3,7 @@ import path from "node:path";
 import PDFDocument from "pdfkit";
 import type { Especie, Porte } from "@prisma/client";
 import type { TermoParaPdf } from "../repository/termoAdocaoRepository";
-import { diaNoFuso, hoje } from "../utils/datas";
+import { diaDoBanco, hoje } from "../utils/datas";
 import {
     DECLARACAO_FINAL,
     INTRODUCAO,
@@ -53,10 +53,12 @@ interface Campo {
     fracao: number;
 }
 
-// Data (DateTime) -> DD/MM/AAAA no fuso do abrigo.
+// Data de calendário (castração, revacinação) -> DD/MM/AAAA pelo dia em UTC, como o frontend
+// (diaDaApi). Sem converter para o fuso do abrigo: "AAAA-MM-DD" gravado à meia-noite UTC
+// sairia no dia anterior; o meio-dia local enviado pelo frontend fica no mesmo dia em UTC.
 function dataBR(data: Date | null) {
     if (!data) return null;
-    const [ano, mes, dia] = diaNoFuso(data).split("-");
+    const [ano, mes, dia] = diaDoBanco(data).split("-");
     return `${dia}/${mes}/${ano}`;
 }
 
