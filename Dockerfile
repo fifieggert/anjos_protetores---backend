@@ -34,9 +34,8 @@ COPY src ./src
 RUN npm run build
 
 # ---- prod-deps: só dependências de produção ----
-# Não instala o vitest e afins: o package-lock (gerado no Windows) não tem os binários de
-# Linux do rolldown, e a imagem não precisa deles. O CLI `prisma` está em "dependencies",
-# então o `migrate deploy` funciona na imagem final.
+# Sem as devDependencies (vitest, oxlint, tsx...), a imagem final fica menor e com menos
+# pacotes. O CLI `prisma` está em "dependencies", então o `migrate deploy` funciona nela.
 FROM base AS prod-deps
 ARG BUILD_DATABASE_URL
 COPY package.json package-lock.json ./

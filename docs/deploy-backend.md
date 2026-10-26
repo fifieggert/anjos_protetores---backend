@@ -136,15 +136,19 @@ em comentário.
 
 ### Lockfile e binários nativos
 
-O `package-lock.json` atual foi gerado no Windows e não tem as entradas dos binários nativos
-do `rolldown` (dependência do vitest), para nenhuma plataforma, por um bug do npm com
-`optionalDependencies`. Consequências e solução atual:
+O `package-lock.json` foi regenerado do zero com o **npm 11.19.1** (o npm que vem com o Node
+24.22.1 do `.nvmrc`) e tem as entradas dos binários nativos de todas as plataformas
+(`@rolldown/binding-*`, `lightningcss-*`, `@oxlint/binding-*`, `@esbuild/*`). Por isso o CI e
+o Docker usam só `npm ci`, sem passos extras, e o mesmo lockfile serve para Windows, macOS e
+Linux (glibc e musl).
 
-- **Imagem Docker:** não é afetada. A imagem final instala só dependências de produção
-  (`npm ci --omit=dev`), e o build não usa o vitest.
-- **CI:** depois do `npm ci`, um passo instala só `@rolldown/binding-linux-x64-gnu`, na mesma
-  versão do `rolldown` travado, com `--no-save` (sem alterar `package.json` nem o lockfile).
-- **Correção definitiva (recomendada, em uma tarefa própria):** regenerar o lockfile com
-  `rm -rf node_modules package-lock.json && npm install`, rodar todos os testes e revisar o
-  diff. Isso atualiza várias dependências dentro das faixas do `package.json` e corrige os
-  avisos atuais do `npm audit`. Depois disso, o passo extra do CI pode ser removido.
+Para atualizar o lockfile, use a mesma versão do npm, para não perder essas entradas:
+
+```bash
+rm -rf node_modules package-lock.json
+npx -y npm@11.19.1 install
+```
+
+Depois rode `lint`, `typecheck`, `test:cov` e `build`, e revise o diff do lockfile antes do
+commit. Se o `npm ci` do CI falhar com `Missing: <pacote> from lock file`, o lockfile foi
+gerado por outro npm: regenere da forma acima.

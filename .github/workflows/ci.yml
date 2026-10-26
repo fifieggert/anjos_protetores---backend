@@ -35,15 +35,6 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # O package-lock.json foi gerado no Windows sem as entradas dos binários nativos do
-      # rolldown (usado pelo vitest), por um bug do npm com optionalDependencies. Instala só
-      # o binário de Linux, na versão já travada, sem alterar package.json nem o lockfile.
-      # Pode ser removido depois que o lockfile for regenerado (ver docs/deploy-backend.md).
-      - name: Binário nativo do rolldown (Linux)
-        run: |
-          versao="$(node -p "require('rolldown/package.json').version")"
-          npm install --no-save "@rolldown/binding-linux-x64-gnu@${versao}"
-
       - name: Prisma client
         run: npm run prisma:generate
         env:
@@ -62,6 +53,8 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Publica mesmo se um passo anterior falhar. Se os testes nem chegaram a rodar, não há
+      # coverage/: só um aviso, para o erro real continuar sendo o do passo que falhou.
       - name: Publicar cobertura
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -69,7 +62,7 @@ jobs:
           name: coverage
           path: coverage/
           retention-days: 14
-          if-no-files-found: error
+          if-no-files-found: warn
 
   docker:
     name: Imagem Docker (build, sem push)
