@@ -100,7 +100,9 @@ export const dataOpcionalNula = () =>
 // no fuso do abrigo, para o dia gravado ser o mesmo que a pessoa escolheu.
 export const diaObrigatorio = () =>
     z
-        .union([z.iso.date(), z.iso.datetime({ offset: true })], { error: NOMES_FORMATO["datetime"] })
+        .union([z.iso.date(), z.iso.datetime({ offset: true })], {
+            error: (issue) => (issue.input === undefined ? "Campo obrigatório." : NOMES_FORMATO["datetime"]),
+        })
         .transform((valor) => (valor.length === 10 ? valor : diaNoFuso(new Date(valor))));
 
 // Horário "HH:mm" (00:00 a 23:59).

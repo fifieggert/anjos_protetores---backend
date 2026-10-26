@@ -26,8 +26,7 @@ describe("validar", () => {
             error: "Dados inválidos.",
             campos: {
                 titulo: "O título deve ter no mínimo 3 caracteres.",
-                // data ausente: a union de formatos dá "Data inválida" em vez de "Campo obrigatório"
-                data: "Data inválida. Use o formato AAAA-MM-DD ou AAAA-MM-DDTHH:MM:SSZ.",
+                data: "Campo obrigatório.",
                 extra: "Campo não permitido.",
                 outro: "Campo não permitido.",
             },
