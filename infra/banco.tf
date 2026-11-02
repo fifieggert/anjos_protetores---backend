@@ -79,7 +79,7 @@ resource "aws_db_instance" "banco" {
 
   # Backup automático diário, guardado por 7 dias (permite restaurar o banco em qualquer
   # momento desses 7 dias). Horários em UTC: 06h–07h UTC = 03h–04h em Brasília.
-  backup_retention_period = 7
+  backup_retention_period = 1
   backup_window           = "06:00-07:00"
   maintenance_window      = "sun:07:30-sun:08:30"
   copy_tags_to_snapshot   = true
