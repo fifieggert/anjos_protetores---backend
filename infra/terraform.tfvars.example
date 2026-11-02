@@ -1,0 +1,14 @@
+# Copie para terraform.tfvars (que está no .gitignore) e ajuste:
+#   cp terraform.tfvars.example terraform.tfvars
+# Este arquivo NÃO deve ter segredos: as senhas são geradas pelo próprio Terraform.
+
+# Obrigatórios: repositórios no formato "dono/repo" que podem fazer deploy (só na branch main).
+github_repo_backend  = "fifieggert/anjos_protetores---backend"
+github_repo_frontend = "fifieggert/anjos_protetores---frontend"
+
+# Opcionais (os valores abaixo já são o padrão):
+# region            = "sa-east-1"
+# project           = "anjos"
+# instance_type     = "t3.micro"
+# db_instance_class = "db.t4g.micro"
+# domain            = "abrigoanjosprotetores.com.br"

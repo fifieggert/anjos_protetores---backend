@@ -34,3 +34,6 @@ docs
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Terraform: não faz parte da imagem (e a pasta .terraform tem centenas de MB)
+infra
