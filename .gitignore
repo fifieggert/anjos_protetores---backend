@@ -28,3 +28,10 @@ Thumbs.db
 
 # Testes
 coverage/
+
+# Terraform (infra/). O .terraform.lock.hcl NÃO é ignorado: ele deve ser versionado.
+infra/.terraform/
+infra/*.tfstate*
+infra/terraform.tfvars
+# plano salvo com "terraform plan -out": contém os segredos em texto puro
+infra/tfplan
