@@ -1,29 +1,21 @@
 import prisma from "../config/prisma";
 import { Prisma } from "@prisma/client";
 
-const solicitacaoAdocaoSelect = {
+// Uso interno (ADMIN): nome e telefone nunca saem por rota pública.
+export const solicitacaoAdocaoSelect = {
     id: true,
-    animalId: true,
-    animal: true,
-    nomeInteressado: true,
-    email: true,
+    nome: true,
     telefone: true,
     status: true,
-    justificativa: true,
     criadoEm: true,
-    termo: true,
+    atualizadoEm: true,
+    animal: { select: { id: true, nome: true, especie: true, fotoUrl: true } },
 } satisfies Prisma.SolicitacaoAdocaoSelect;
 
 export class solicitacaoAdocaoRepository {
-    create(data: Prisma.SolicitacaoAdocaoCreateInput) {
-        return prisma.solicitacaoAdocao.create({
-            data,
-            select: solicitacaoAdocaoSelect,
-        });
-    }
-
-    findAll() {
+    findAll(filtros: Prisma.SolicitacaoAdocaoWhereInput) {
         return prisma.solicitacaoAdocao.findMany({
+            where: filtros,
             select: solicitacaoAdocaoSelect,
             orderBy: { criadoEm: "desc" },
         });
@@ -33,20 +25,6 @@ export class solicitacaoAdocaoRepository {
         return prisma.solicitacaoAdocao.findUnique({
             where: { id },
             select: solicitacaoAdocaoSelect,
-        });
-    }
-
-    update(id: string, data: Prisma.SolicitacaoAdocaoUpdateInput) {
-        return prisma.solicitacaoAdocao.update({
-            where: { id },
-            data,
-            select: solicitacaoAdocaoSelect,
-        });
-    }
-
-    delete(id: string) {
-        return prisma.solicitacaoAdocao.delete({
-            where: { id },
         });
     }
 }

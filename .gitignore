@@ -6,6 +6,7 @@ build/
 # Variáveis de Ambiente (Segurança)
 .env
 .env.local
+.env.docker
 
 # Logs
 npm-debug.log*
@@ -13,7 +14,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # Prisma
-/prisma/migrations/
 *.db
 *.db-journal
 
@@ -25,3 +25,13 @@ Thumbs.db
 .vscode/
 .idea/
 /generated/prisma
+
+# Testes
+coverage/
+
+# Terraform (infra/). O .terraform.lock.hcl NÃO é ignorado: ele deve ser versionado.
+infra/.terraform/
+infra/*.tfstate*
+infra/terraform.tfvars
+# plano salvo com "terraform plan -out": contém os segredos em texto puro
+infra/tfplan

@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "oxc",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "vitest/expect-expect": [
+      "error",
+      {
+        "assertFunctionNames": [
+          "expect",
+          "esperarAppError"
+        ]
+      }
+    ]
+  },
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    "node_modules/**"
+  ]
+}

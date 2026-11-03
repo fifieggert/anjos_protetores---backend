@@ -1,7 +1,10 @@
 import prisma from "../config/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, StatusAnimal } from "@prisma/client";
+import type { Especie, Porte } from "@prisma/client";
 
-const animalSelect = {
+// Sem as solicitações: nome e telefone dos interessados só aparecem nas rotas de
+// solicitações de adoção, que são exclusivas do ADMIN.
+export const animalSelect = {
     id: true,
     nome: true,
     especie: true,
@@ -11,9 +14,34 @@ const animalSelect = {
     status: true,
     fotoUrl: true,
     descricao: true,
+    sexo: true,
+    castrado: true,
+    dataCastracao: true,
+    vacinado: true,
+    dosesVacina: true,
+    dataRevacinacao: true,
     criadoEm: true,
-    solicitacoes: true,
 } satisfies Prisma.AnimalSelect;
+
+// Campos exibidos no site público: sem solicitações, cadastrante ou datas internas.
+const animalPublicoSelect = {
+    id: true,
+    nome: true,
+    especie: true,
+    raca: true,
+    idade: true,
+    porte: true,
+    fotoUrl: true,
+    descricao: true,
+    sexo: true,
+    castrado: true,
+    vacinado: true,
+} satisfies Prisma.AnimalSelect;
+
+export interface FiltrosAnimalPublico {
+    especie?: Especie;
+    porte?: Porte;
+}
 
 export class animalRepository {
     create(data: Prisma.AnimalCreateInput) {
@@ -37,11 +65,11 @@ export class animalRepository {
         });
     }
 
-    update(id: string, data: Prisma.AnimalUpdateInput) {
-        return prisma.animal.update({
-            where: { id },
-            data,
-            select: animalSelect,
+    findDisponiveis(filtros: FiltrosAnimalPublico) {
+        return prisma.animal.findMany({
+            where: { status: StatusAnimal.DISPONIVEL, ...filtros },
+            select: animalPublicoSelect,
+            orderBy: { criadoEm: "desc" },
         });
     }
 

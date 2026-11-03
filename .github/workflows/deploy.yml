@@ -1,0 +1,169 @@
+# CD do backend: build da imagem, push para o ECR e deploy na EC2 via SSM.
+# Detalhes (arquitetura, rollback, logs) em docs/deploy-aws.md.
+#
+# Autenticação na AWS por OIDC: sem chave de acesso guardada no GitHub. A role
+# github-actions-deploy só aceita execuções da branch main (infra/github_oidc.tf).
+# O ARN dela fica na variável do repositório AWS_ROLE_ARN (Settings > Secrets and
+# variables > Actions > Variables).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # o GitHub emite o token OIDC que é trocado por credenciais da AWS
+  contents: read
+
+# Nunca dois deploys ao mesmo tempo. Um novo espera o anterior terminar (não cancela no
+# meio, para não interromper uma migration).
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: sa-east-1
+  REGISTRO: 188289742729.dkr.ecr.sa-east-1.amazonaws.com
+  NOME_EC2: anjos-app
+
+jobs:
+  deploy:
+    name: Build, push e deploy na EC2
+    # Sem "environment:" de propósito: com ele o token OIDC muda de formato e a trust
+    # policy da role (que confia em ref:refs/heads/main) recusaria.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_IMAGE: 188289742729.dkr.ecr.sa-east-1.amazonaws.com/anjos-backend:${{ github.sha }}
+      BACKEND_LATEST: 188289742729.dkr.ecr.sa-east-1.amazonaws.com/anjos-backend:latest
+      # O frontend tem pipeline próprio; aqui usa a versão "latest" já publicada no ECR.
+      FRONTEND_IMAGE: 188289742729.dkr.ecr.sa-east-1.amazonaws.com/anjos-frontend:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Credenciais da AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: deploy-backend-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login no ECR
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRO"
+
+      - name: Conferir se a imagem do frontend existe no ECR
+        run: |
+          docker buildx imagetools inspect "$FRONTEND_IMAGE" > /dev/null \
+            || { echo "::error::Imagem $FRONTEND_IMAGE não encontrada. Publique o frontend antes."; exit 1; }
+
+      - name: Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Duas tags: o SHA do commit (única, é a que vai para o servidor) e latest.
+      # O cache de camadas (type=gha) é o mesmo do CI, então o build costuma ser rápido.
+      - name: Build e push da imagem do backend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.BACKEND_IMAGE }}
+            ${{ env.BACKEND_LATEST }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Encontra a EC2 pela tag Name (o ID muda se a máquina for recriada pelo Terraform).
+      - name: Encontrar a EC2
+        id: ec2
+        run: |
+          ids=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=$NOME_EC2" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          qtd=$(wc -w <<< "$ids")
+          if [ "$qtd" -ne 1 ]; then
+            echo "::error::Esperava 1 EC2 ligada com Name=$NOME_EC2, encontrei $qtd."
+            exit 1
+          fi
+          echo "id=$ids" >> "$GITHUB_OUTPUT"
+          echo "EC2: $ids"
+
+      # Copia os 3 arquivos de deploy/ para /opt/anjos (em base64, para nenhum caractere ser
+      # interpretado pelo shell) e roda o deploy.sh. Tudo num único comando do SSM.
+      - name: Deploy na EC2 (SSM Run Command)
+        env:
+          INSTANCIA: ${{ steps.ec2.outputs.id }}
+        run: |
+          set -euo pipefail
+          b64() { base64 -w0 "$1"; }
+
+          # O "> arquivo" reescreve o Caddyfile no mesmo lugar (mesmo inode), para o
+          # container do Caddy, que monta esse arquivo, enxergar a versão nova.
+          jq -n \
+            --arg compose "$(b64 deploy/docker-compose.prod.yml)" \
+            --arg caddy "$(b64 deploy/Caddyfile)" \
+            --arg script "$(b64 deploy/deploy.sh)" \
+            --arg backend "$BACKEND_IMAGE" \
+            --arg frontend "$FRONTEND_IMAGE" \
+            '{
+              executionTimeout: ["1200"],
+              commands: [
+                "set -euo pipefail",
+                "install -d -m 755 /opt/anjos",
+                "echo \($compose) | base64 -d > /opt/anjos/docker-compose.prod.yml",
+                "echo \($caddy) | base64 -d > /opt/anjos/Caddyfile",
+                "echo \($script) | base64 -d > /opt/anjos/deploy.sh",
+                "chmod 644 /opt/anjos/docker-compose.prod.yml /opt/anjos/Caddyfile",
+                "chmod 700 /opt/anjos/deploy.sh",
+                "BACKEND_IMAGE='\($backend)' FRONTEND_IMAGE='\($frontend)' /opt/anjos/deploy.sh"
+              ]
+            }' > parametros.json
+
+          comando=$(aws ssm send-command \
+            --instance-ids "$INSTANCIA" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy backend ${GITHUB_SHA::7}" \
+            --parameters file://parametros.json \
+            --timeout-seconds 120 \
+            --query Command.CommandId --output text)
+          echo "Comando SSM: $comando"
+
+          # Acompanha até terminar (até 20 min, o mesmo executionTimeout acima).
+          status=Pending
+          for _ in $(seq 1 120); do
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$comando" --instance-id "$INSTANCIA" \
+              --query Status --output text 2> /dev/null || echo Pending)
+            case "$status" in
+              Pending | InProgress | Delayed) echo "... $status" ;;
+              *) break ;;
+            esac
+          done
+
+          echo "::group::Saída do deploy.sh"
+          aws ssm get-command-invocation --command-id "$comando" --instance-id "$INSTANCIA" \
+            --query StandardOutputContent --output text || true
+          echo "::endgroup::"
+          echo "::group::Erros do deploy.sh"
+          aws ssm get-command-invocation --command-id "$comando" --instance-id "$INSTANCIA" \
+            --query StandardErrorContent --output text || true
+          echo "::endgroup::"
+
+          echo "Status final: $status"
+          if [ "$status" != "Success" ]; then
+            echo "::error::O deploy na EC2 terminou com status $status (veja a saída acima)."
+            exit 1
+          fi
+
+      - name: Resumo
+        if: ${{ success() }}
+        run: |
+          {
+            echo "### Deploy concluído"
+            echo "- Backend: \`$BACKEND_IMAGE\`"
+            echo "- Frontend: \`$FRONTEND_IMAGE\`"
+            echo "- https://abrigoanjosprotetores.com.br"
+          } >> "$GITHUB_STEP_SUMMARY"
