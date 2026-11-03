@@ -9,6 +9,7 @@ import saidaEstoqueRoutes from "./saidaEstoqueRoutes";
 import solicitacaoAdocaoRoutes from "./solicitacaoAdocaoRoutes";
 import termoAdocaoRoutes from "./termoAdocaoRoutes";
 import eventoRoutes from "./eventoRoutes";
+import dashboardRoutes from "./dashboardRoutes";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/saidas-estoque", saidaEstoqueRoutes);
 router.use("/solicitacoes-adocao", solicitacaoAdocaoRoutes);
 router.use("/termos-adocao", termoAdocaoRoutes);
 router.use("/eventos", eventoRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;
