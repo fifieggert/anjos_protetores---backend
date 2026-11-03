@@ -84,6 +84,33 @@ describe("registrarEncerramento", () => {
         await vi.waitFor(() => expect(sair).toHaveBeenCalledWith(1));
     });
 
+    it.each([
+        ["um Error", new TypeError("detalhe interno que não vai para o log"), "TypeError"],
+        ["outro valor", "detalhe interno que não vai para o log", "string"],
+    ])("falha inesperada ao sair (%s): registra só o tipo, marca exitCode 1 e o prazo ainda força a saída", async (_caso, falha, tipo) => {
+        const exitCodeAntes = process.exitCode;
+        try {
+            const { processo, servidor, sair } = preparar();
+            sair.mockImplementationOnce(() => {
+                throw falha;
+            });
+
+            processo.emit("SIGTERM");
+            servidor.terminarConexoes();
+
+            await vi.waitFor(() => expect(process.exitCode).toBe(1));
+            expect(console.error).toHaveBeenCalledWith(`[servidor] Erro ao encerrar: ${tipo}`);
+            expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("detalhe interno");
+
+            // nenhuma promessa fica sem tratamento e a rede de segurança continua ativa
+            vi.advanceTimersByTime(10_000);
+            expect(sair).toHaveBeenLastCalledWith(1);
+            expect(sair).toHaveBeenCalledTimes(2);
+        } finally {
+            process.exitCode = exitCodeAntes;
+        }
+    });
+
     it("depois de sair normalmente, o prazo não dispara uma segunda saída", async () => {
         const { processo, servidor, sair } = preparar();
         processo.emit("SIGTERM");

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import { describe, expect, it, vi } from "vitest";
-import { gerarTermoPdf, nomeArquivoTermo } from "../../service/termoPdfService";
+import { gerarTermoPdf, nomeArquivoTermo, removerHifensDasPontas } from "../../service/termoPdfService";
 import { clausulas } from "../../service/termoTexto";
 import type { TermoParaPdf } from "../../repository/termoAdocaoRepository";
 
@@ -195,5 +195,36 @@ describe("nomeArquivoTermo", () => {
     it("limita a 60 caracteres sem terminar em hífen", () => {
         const nome = nomeArquivoTermo(`${"a".repeat(59)} b`);
         expect(nome).toBe(`termo-adocao-${"a".repeat(59)}.pdf`);
+    });
+
+    it("nome enorme e malicioso (milhões de hífens/símbolos) termina rápido", () => {
+        // com a regex antiga (/-+$/), 30 mil hífens seguidos de uma letra já levavam centenas de ms,
+        // e o tempo crescia ao quadrado; agora é linear
+        const inicio = performance.now();
+        const nome = nomeArquivoTermo(`${"-".repeat(1_000_000)}Rex${" !-".repeat(500_000)}x`);
+        expect(performance.now() - inicio).toBeLessThan(1_000);
+        expect(nome).toBe("termo-adocao-rex-x.pdf");
+    });
+});
+
+describe("removerHifensDasPontas", () => {
+    it.each([
+        ["-rex-", "rex"],
+        ["---a-b---", "a-b"],
+        ["a--b", "a--b"],
+        ["sem-hifen-nas-pontas", "sem-hifen-nas-pontas"],
+        ["----", ""],
+        ["-", ""],
+        ["", ""],
+    ])("%j -> %j (só as pontas, o meio fica igual)", (texto, esperado) => {
+        expect(removerHifensDasPontas(texto)).toBe(esperado);
+    });
+
+    it("entrada longa e maliciosa termina rápido", () => {
+        const texto = `${"-".repeat(1_000_000)}x${"-".repeat(1_000_000)}`;
+        const inicio = performance.now();
+        expect(removerHifensDasPontas(texto)).toBe("x");
+        expect(removerHifensDasPontas(`${"-".repeat(1_000_000)}x`)).toBe("x");
+        expect(performance.now() - inicio).toBeLessThan(1_000);
     });
 });

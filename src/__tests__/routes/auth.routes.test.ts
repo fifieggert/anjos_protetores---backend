@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "../helpers/prisma";
 import { api } from "../helpers/app";
 import { ID_ADMIN } from "../helpers/auth";
@@ -62,6 +62,25 @@ describe("POST /api/auth/login", () => {
         const res = await api().post("/api/auth/login").send({ email: "ninguem@abrigo.org", senha: "qualquer" });
         expect(res.status).toBe(401);
         expect(res.body).toEqual(CREDENCIAIS_INVALIDAS);
+    });
+
+    it("e-mail inexistente ainda compara a senha com um hash falso de mesmo custo (mesmo tempo de resposta)", async () => {
+        prismaMock.usuario.findUnique.mockResolvedValue(null);
+        const comparar = vi.spyOn(bcrypt, "compare");
+
+        for (const senha of ["primeira", "segunda"]) {
+            const res = await api().post("/api/auth/login").send({ email: "ninguem@abrigo.org", senha });
+            expect(res.status).toBe(401);
+            expect(res.body).toEqual(CREDENCIAIS_INVALIDAS);
+        }
+
+        expect(comparar).toHaveBeenCalledTimes(2);
+        const [[senha1, hash1], [senha2, hash2]] = comparar.mock.calls as unknown as [[string, string], [string, string]];
+        expect([senha1, senha2]).toEqual(["primeira", "segunda"]);
+        // hash bcrypt válido, com o custo 10 dos hashes reais (gerarHashSenha)
+        expect(hash1).toMatch(/^\$2b\$10\$[./A-Za-z0-9]{53}$/);
+        // gerado uma vez e reaproveitado
+        expect(hash2).toBe(hash1);
     });
 
     it("corpo inválido dá 400 sem consultar o banco", async () => {

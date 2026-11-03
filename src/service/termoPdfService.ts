@@ -82,11 +82,20 @@ export function nomeArquivoTermo(nomeAnimal: string) {
         .normalize("NFD")
         .replace(/[̀-ͯ]/g, "")
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 60)
-        .replace(/-+$/g, "");
-    return `termo-adocao-${base || "animal"}.pdf`;
+        .replace(/[^a-z0-9]+/g, "-");
+    // tira os hífens das pontas, corta em 60 caracteres e tira o hífen que o corte deixar no fim
+    const nome = removerHifensDasPontas(removerHifensDasPontas(base).slice(0, 60));
+    return `termo-adocao-${nome || "animal"}.pdf`;
+}
+
+// Remove hífens do começo e do fim. Sem regex de propósito: dois laços simples, cada
+// caractere é olhado no máximo uma vez (tempo linear), mesmo com um texto enorme.
+export function removerHifensDasPontas(texto: string) {
+    let inicio = 0;
+    let fim = texto.length;
+    while (inicio < fim && texto[inicio] === "-") inicio++;
+    while (fim > inicio && texto[fim - 1] === "-") fim--;
+    return texto.slice(inicio, fim);
 }
 
 // Gera o termo em PDF (A4, até 2 páginas). Os dados vêm do banco no momento da geração.
