@@ -1,0 +1,96 @@
+# PRODUÇÃO na EC2 (pasta /opt/anjos). Não confundir com o docker-compose.yml da raiz, que é
+# só para desenvolvimento local.
+#
+# Quem usa este arquivo é o deploy/deploy.sh, executado pelo GitHub Actions via SSM.
+# As imagens vêm do ECR; a versão de cada uma é definida pelas variáveis BACKEND_IMAGE e
+# FRONTEND_IMAGE, gravadas pelo deploy.sh no /opt/anjos/.env (o docker compose lê esse
+# arquivo sozinho por estar na mesma pasta).
+#
+# Comandos úteis (na EC2, como root: "sudo -i" e "cd /opt/anjos"):
+#   docker compose -f docker-compose.prod.yml ps
+#   docker compose -f docker-compose.prod.yml logs -f api
+# Mais em docs/deploy-aws.md.
+name: anjos
+
+# Limite de tamanho dos logs de cada container (3 arquivos de 10 MB). Sem isso, o log
+# cresce até encher o disco de 20 GB da EC2.
+x-logs: &logs
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Proxy reverso com HTTPS automático (ver Caddyfile). É o único container com portas
+  # abertas para a internet.
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # certificados e chaves do Let's Encrypt: precisam sobreviver à recriação do container,
+      # senão o Caddy pede certificado novo a cada deploy e esbarra no limite do Let's Encrypt
+      - caddy-dados:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - web
+    <<: *logs
+
+  # Frontend (arquivos estáticos do React servidos na porta 8080, só na rede interna).
+  web:
+    image: ${FRONTEND_IMAGE:?defina FRONTEND_IMAGE (feito pelo deploy.sh)}
+    restart: unless-stopped
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    <<: *logs
+
+  # API (backend). Porta 4000 só na rede interna: da internet, só se chega pelo Caddy em /api.
+  api:
+    image: ${BACKEND_IMAGE:?defina BACKEND_IMAGE (feito pelo deploy.sh)}
+    restart: unless-stopped
+    # Usuário sem privilégios da imagem oficial do Node (o Dockerfile já usa; aqui fica explícito).
+    user: node
+    # Segredos e configuração, gerados pelo deploy.sh a partir do SSM Parameter Store
+    # (arquivo com permissão 600, só o root lê).
+    env_file:
+      - /opt/anjos/.env
+    environment:
+      # O Node não conhece a autoridade certificadora (CA) do RDS. A API já usa o arquivo
+      # indicado em "sslcert" na DATABASE_URL; esta variável é uma segunda garantia para
+      # qualquer outra conexão TLS do Node com a AWS.
+      NODE_EXTRA_CA_CERTS: /certs/rds-ca.pem
+    volumes:
+      # certificado do RDS baixado pelo user_data da EC2 (somente leitura)
+      - /opt/anjos/certs:/certs:ro
+    expose:
+      - "4000"
+    # Remove permissões especiais do Linux que a API não usa.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Liveness: o processo responde? (não depende do banco, para o container não ficar
+    # "unhealthy" por uma falha passageira do RDS). A prontidão com o banco
+    # (/health/ready) é conferida pelo deploy.sh.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    <<: *logs
+
+volumes:
+  caddy-dados:
+  caddy-config:

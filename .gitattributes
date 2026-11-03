@@ -1,0 +1,4 @@
+# Scripts e configurações que rodam no Linux da EC2 sempre com fim de linha LF,
+# mesmo quando o repositório é aberto no Windows (com CRLF o bash falha).
+*.sh text eol=lf
+deploy/** text eol=lf

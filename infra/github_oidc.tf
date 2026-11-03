@@ -91,6 +91,14 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
       },
       {
+        # Encontrar a EC2 pela tag Name=anjos-app (o workflow não guarda o ID da instância).
+        # Somente leitura; a AWS não aceita restringir esta ação por recurso.
+        Sid      = "EncontrarEc2"
+        Effect   = "Allow"
+        Action   = "ec2:DescribeInstances"
+        Resource = "*"
+      },
+      {
         # Acompanhar o resultado dos comandos. Estas ações não aceitam restrição por recurso.
         Sid    = "AcompanharDeploy"
         Effect = "Allow"

@@ -1,6 +1,6 @@
 # CI do backend: qualidade (lint, tipos, testes com cobertura, build), build da imagem
 # Docker (sem push) e análise no SonarCloud (só quando o segredo SONAR_TOKEN existir).
-# O deploy (CD) fica para outra etapa. Detalhes em docs/deploy-backend.md.
+# O deploy (CD) é o deploy.yml. Detalhes em docs/deploy-backend.md e docs/deploy-aws.md.
 name: CI
 
 on:
