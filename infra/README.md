@@ -146,8 +146,9 @@ pronta:
 mysql://anjos:<senha-url-encoded>@<endpoint-rds>:3306/anjos_protetores?ssl=true&sslaccept=strict&sslcert=/certs/rds-ca.pem
 ```
 
-- `ssl=true` liga o TLS no driver MariaDB que a API usa (`src/config/prisma.ts`).
-- `sslaccept=strict` e `sslcert` ligam e validam o TLS no `prisma migrate deploy`.
+- `sslaccept=strict` e `sslcert` ligam e validam o TLS no `prisma migrate deploy` e também
+  na API: `src/utils/conexaoBanco.ts` lê o arquivo de `sslcert` e passa ao driver MariaDB.
+- `ssl=true` é mantido por compatibilidade (o `migrate deploy` o ignora).
 - O certificado da AWS fica na EC2 em `/opt/anjos/certs/rds-ca.pem` (baixado pelo `user_data`).
 
 Para isso funcionar, o container da API (e o das migrations) precisa, no docker-compose de
@@ -220,4 +221,6 @@ parte disso. Para não gastar à toa, rode `terraform destroy` quando não estiv
   haver um). Importe-o: `terraform import aws_iam_openid_connect_provider.github arn:aws:iam::<conta>:oidc-provider/token.actions.githubusercontent.com`.
 - **EC2 não aparece no SSM**: espere alguns minutos; confira se ela tem o Elastic IP e se o
   security group permite saída.
-- **API não conecta no banco**: confira o `NODE_EXTRA_CA_CERTS` e o volume `/certs` acima.
+- **API não conecta no banco**: confira o volume `/certs` acima (e o `NODE_EXTRA_CA_CERTS`).
+
+O deploy da aplicação (GitHub Actions + SSM) está em `docs/deploy-aws.md`.

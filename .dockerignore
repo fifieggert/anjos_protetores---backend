@@ -37,3 +37,6 @@ Thumbs.db
 
 # Terraform: não faz parte da imagem (e a pasta .terraform tem centenas de MB)
 infra
+
+# Arquivos do servidor (compose de produção, Caddyfile, deploy.sh): vão para a EC2, não para a imagem
+deploy

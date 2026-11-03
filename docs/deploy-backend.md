@@ -1,7 +1,7 @@
 # Deploy do backend
 
-Como configurar, empacotar e validar a API para publicação. O deploy na AWS (CD) é uma etapa
-futura; aqui ficam a imagem Docker, o ambiente local com Docker e o CI.
+Como configurar, empacotar e validar a API para publicação: imagem Docker, ambiente local com
+Docker e CI. O deploy na AWS (CD) está em [deploy-aws.md](deploy-aws.md).
 
 > Todos os valores de exemplo deste documento são **falsos**. Segredos reais nunca vão para
 > arquivos do repositório: em produção ficam no gerenciador de segredos do ambiente.
@@ -10,7 +10,7 @@ futura; aqui ficam a imagem Docker, o ambiente local com Docker e o CI.
 
 | Variável | Para que serve | Obrigatória | Exemplo (falso) |
 |---|---|---|---|
-| `DATABASE_URL` | Conexão com o MySQL (API e `migrate:deploy`) | Sim | `mysql://anjos:senha-falsa@db.exemplo.internal:3306/anjos_protetores` |
+| `DATABASE_URL` | Conexão com o MySQL (API e `migrate:deploy`). Com `sslaccept=strict&sslcert=<arquivo da CA>`, a conexão usa TLS validado (ver `src/utils/conexaoBanco.ts`) | Sim | `mysql://anjos:senha-falsa@db.exemplo.internal:3306/anjos_protetores` |
 | `JWT_SECRET` | Assina os tokens de login. Sem ela a API não sobe | Sim | `gere-um-valor-aleatorio-longo` |
 | `PORT` | Porta HTTP da API | Não (padrão `4000`) | `4000` |
 | `CORS_ORIGIN` | Origens do frontend que podem chamar a API, separadas por vírgula, sem barra no final. Origem inválida impede a API de subir | Não (padrão `http://localhost:5173`) | `https://anjos.exemplo.org,https://www.anjos.exemplo.org` |

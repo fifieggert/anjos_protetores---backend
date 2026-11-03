@@ -1,0 +1,52 @@
+# Caddy: o "porteiro" do servidor. Recebe todo o tráfego da internet (portas 80 e 443),
+# obtém e renova sozinho o certificado HTTPS (Let's Encrypt) e repassa cada requisição
+# para o container certo:
+#   /api/*  -> api (backend Node, porta 4000)
+#   resto   -> web (frontend, porta 8080)
+# Como frontend e API ficam no MESMO domínio, o navegador não faz requisições entre
+# origens diferentes (sem CORS).
+#
+# Pré-requisito do HTTPS automático: os registros DNS (tipo A) do domínio e do www já devem
+# apontar para o Elastic IP da EC2, e as portas 80 e 443 abertas (security group "web").
+# Detalhes em docs/deploy-aws.md.
+
+# Opções globais
+{
+	servers {
+		# Só HTTP/1.1 e HTTP/2. O HTTP/3 usa UDP 443, que o security group não libera.
+		protocols h1 h2
+	}
+}
+
+abrigoanjosprotetores.com.br {
+	# Compressão das respostas (texto, JSON, JS, CSS): páginas mais leves para o visitante.
+	encode zstd gzip
+
+	# Log de acesso em JSON na saída padrão: aparece no "docker compose logs caddy".
+	log {
+		output stdout
+		format json
+	}
+
+	# HSTS: o navegador passa a usar só HTTPS neste domínio por 1 ano.
+	# O "?" só adiciona o header se o container ainda não tiver mandado (a API já manda via helmet).
+	header ?Strict-Transport-Security "max-age=31536000"
+
+	# API: o caminho é repassado completo (/api/animais continua /api/animais).
+	# O Caddy ignora qualquer X-Forwarded-For vindo da internet e manda o IP real do
+	# visitante; por isso a API usa TRUST_PROXY=1 (exatamente um proxy à frente).
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	# Todo o resto é o frontend (páginas, JS, CSS, imagens).
+	handle {
+		reverse_proxy web:8080
+	}
+}
+
+# www: redireciona permanentemente (301) para o domínio sem www, mantendo o caminho.
+# O Caddy também emite o certificado do www, para o redirecionamento funcionar em HTTPS.
+www.abrigoanjosprotetores.com.br {
+	redir https://abrigoanjosprotetores.com.br{uri} permanent
+}
