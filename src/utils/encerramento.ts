@@ -41,8 +41,18 @@ export function registrarEncerramento(
                     () => 1,
                 )
                 .then((codigo) => {
-                    clearTimeout(limite);
                     sair(codigo);
+                    // só cancela o prazo depois que a saída deu certo
+                    clearTimeout(limite);
+                })
+                // Falha inesperada no próprio encerramento: registra só o tipo do erro e marca
+                // o processo para terminar com código 1. O prazo acima continua ativo e
+                // força a saída se o processo não terminar sozinho.
+                .catch((erro: unknown) => {
+                    console.error(
+                        `[servidor] Erro ao encerrar: ${erro instanceof Error ? erro.name : typeof erro}`,
+                    );
+                    process.exitCode = 1;
                 });
         });
     }

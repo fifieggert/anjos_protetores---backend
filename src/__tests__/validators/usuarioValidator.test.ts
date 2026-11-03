@@ -61,7 +61,8 @@ describe("criarUsuarioSchema", () => {
     });
 
     it("recusa campo extra como senhaHash (strictObject)", () => {
-        expect(errosDe(criarUsuarioSchema, { ...valido, senhaHash: "$2b$10$xxx" })).toEqual({
+        // qualquer valor serve: o campo em si é que não é permitido
+        expect(errosDe(criarUsuarioSchema, { ...valido, senhaHash: "valor-qualquer" })).toEqual({
             senhaHash: "Campo não permitido.",
         });
     });
