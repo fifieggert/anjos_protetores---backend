@@ -112,6 +112,34 @@ Em *Settings > Secrets and variables > Actions > Variables*, crie a variável
 `AWS_ROLE_ARN` com o valor do output `github_actions_role_arn` do Terraform. Não é segredo
 (é só um identificador), mas fica fora do código para não fixar a conta no workflow.
 
+### Como a AWS reconhece o GitHub (claim `sub`)
+
+A cada execução, o GitHub entrega ao workflow um token com um campo `sub`, que diz de onde a
+execução veio. A trust policy da role (`infra/github_oidc.tf`) compara esse campo com uma
+lista fechada: **só a branch `main` dos dois repositórios** é aceita.
+
+O GitHub passou a enviar o `sub` com **IDs imutáveis** do dono e do repositório, porque um
+nome pode mudar ou ser reaproveitado, mas o ID não. A role aceita os dois formatos:
+
+```
+repo:fifieggert@168691455/anjos_protetores---backend@1362769302:ref:refs/heads/main    # novo
+repo:fifieggert/anjos_protetores---backend:ref:refs/heads/main                         # antigo
+```
+
+O frontend segue o mesmo modelo, com o ID `1362871407`. Os IDs estão em
+`infra/variables.tf` e não são segredos. Há duas formas de descobri-los:
+
+- Pela API do GitHub:
+
+  ```bash
+  gh api repos/fifieggert/anjos_protetores---backend --jq .id        # ID do repositório
+  gh api repos/fifieggert/anjos_protetores---backend --jq .owner.id  # ID do dono
+  ```
+
+- Pelo CloudTrail: o erro do job (`Not authorized to perform
+  sts:AssumeRoleWithWebIdentity`) não mostra o `sub`, mas o evento
+  `AssumeRoleWithWebIdentity` registra o valor que o GitHub enviou.
+
 ### Conexão com o banco (TLS)
 
 A `DATABASE_URL` do SSM tem o formato:
@@ -234,7 +262,7 @@ O detalhamento e as premissas estão em `infra/README.md`. Fora do TCC, desligue
 
 | Sintoma | Causa provável |
 |---|---|
-| Job falha em "Credenciais da AWS" | Variável `AWS_ROLE_ARN` ausente, ou execução fora da `main` (a role só confia na `main`) |
+| Job falha em "Credenciais da AWS" | Variável `AWS_ROLE_ARN` ausente, execução fora da `main` (a role só confia na `main`) ou `sub` diferente do esperado (veja *Como a AWS reconhece o GitHub*) |
 | "Esperava 1 EC2 ligada" | EC2 desligada, tag `Name` diferente de `anjos-app`, ou a role sem `ec2:DescribeInstances` (aplicar `infra/github_oidc.tf`) |
 | Status `Undeliverable`/`TimedOut` | Agente do SSM fora do ar na EC2; veja *Fleet Manager* no console |
 | Migrations falham | `DATABASE_URL` errada, certificado ausente em `/opt/anjos/certs` ou migration inválida. A versão antiga continua no ar |
