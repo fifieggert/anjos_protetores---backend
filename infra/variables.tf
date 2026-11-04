@@ -51,6 +51,27 @@ variable "github_repo_frontend" {
   }
 }
 
+# IDs numéricos do dono e dos repositórios no GitHub. Diferente do nome, o ID nunca muda, e o
+# GitHub agora coloca esses IDs no claim "sub" do token OIDC (ver github_oidc.tf).
+# Não são segredos: qualquer pessoa consegue consultá-los pela API do GitHub.
+variable "github_owner_id" {
+  description = "ID numérico do dono dos repositórios no GitHub. Ver com: gh api repos/dono/repo --jq .owner.id"
+  type        = string
+  default     = "168691455"
+}
+
+variable "github_repo_id_backend" {
+  description = "ID numérico do repositório do backend no GitHub. Ver com: gh api repos/dono/repo --jq .id"
+  type        = string
+  default     = "1362769302"
+}
+
+variable "github_repo_id_frontend" {
+  description = "ID numérico do repositório do frontend no GitHub. Ver com: gh api repos/dono/repo --jq .id"
+  type        = string
+  default     = "1362871407"
+}
+
 variable "tags" {
   description = "Tags aplicadas em todos os recursos, para identificar o projeto no console e na fatura."
   type        = map(string)
