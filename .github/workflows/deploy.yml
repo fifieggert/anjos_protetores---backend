@@ -118,7 +118,7 @@ jobs:
                 "echo \($script) | base64 -d > /opt/anjos/deploy.sh",
                 "chmod 644 /opt/anjos/docker-compose.prod.yml /opt/anjos/Caddyfile",
                 "chmod 700 /opt/anjos/deploy.sh",
-                "BACKEND_IMAGE='\($backend)' FRONTEND_IMAGE='\($frontend)' /opt/anjos/deploy.sh"
+                "BACKEND_IMAGE=\($backend) FRONTEND_IMAGE=\($frontend) /opt/anjos/deploy.sh"
               ]
             }' > parametros.json
 
