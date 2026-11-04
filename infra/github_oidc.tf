@@ -18,12 +18,23 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
+  # Cada repositório: o ID dele => [dono, repo], separados a partir de "dono/repo".
+  github_repos = {
+    (var.github_repo_id_backend)  = split("/", var.github_repo_backend)
+    (var.github_repo_id_frontend) = split("/", var.github_repo_frontend)
+  }
+
   # Só estas origens podem assumir a role: os dois repositórios, e apenas na branch main.
   # Um PR, outra branch ou um fork não conseguem fazer deploy.
-  github_subs = [
-    "repo:${var.github_repo_backend}:ref:refs/heads/main",
-    "repo:${var.github_repo_frontend}:ref:refs/heads/main",
-  ]
+  # Cada repositório aparece nos dois formatos do claim "sub" (basta bater com um deles):
+  # - novo, com IDs imutáveis: repo:dono@id_dono/repo@id_repo:ref:refs/heads/main
+  # - antigo, mantido por compatibilidade: repo:dono/repo:ref:refs/heads/main
+  github_subs = flatten([
+    for id_repo, nome in local.github_repos : [
+      "repo:${nome[0]}@${var.github_owner_id}/${nome[1]}@${id_repo}:ref:refs/heads/main",
+      "repo:${nome[0]}/${nome[1]}:ref:refs/heads/main",
+    ]
+  ])
 }
 
 resource "aws_iam_role" "github_actions" {

@@ -137,6 +137,29 @@ steps:
 A role só aceita execuções da branch `main`. Se o job usar `environment:`, o GitHub muda o
 formato do token e a trust policy em `github_oidc.tf` precisa ser ajustada.
 
+#### IDs do GitHub no claim `sub`
+
+O token que o GitHub envia tem um campo `sub` que diz de onde a execução veio, e é ele que a
+trust policy confere. O GitHub passou a colocar nesse campo os **IDs imutáveis** do dono e do
+repositório, porque um nome pode mudar ou ser reaproveitado, mas o ID não. Por isso a role
+aceita os dois formatos, para cada repositório:
+
+```
+repo:<dono>@<id_dono>/<repo>@<id_repo>:ref:refs/heads/main   # novo
+repo:<dono>/<repo>:ref:refs/heads/main                       # antigo (compatibilidade)
+```
+
+Os IDs ficam em `variables.tf` (`github_owner_id`, `github_repo_id_backend` e
+`github_repo_id_frontend`) e não são segredos. Para descobri-los:
+
+```bash
+gh api repos/<dono>/<repo> --jq .owner.id   # ID do dono
+gh api repos/<dono>/<repo> --jq .id         # ID do repositório
+```
+
+Se o repositório for recriado, o ID muda; se for renomeado, o nome no `sub` muda. Nos dois
+casos, atualize as variáveis e rode o `terraform apply`.
+
 ## Conexão com o banco (TLS)
 
 O banco recusa conexões sem TLS. A `DATABASE_URL` guardada em `/anjos/database_url` já vem
@@ -219,6 +242,9 @@ parte disso. Para não gastar à toa, rode `terraform destroy` quando não estiv
 
 - **`EntityAlreadyExists` no OIDC provider**: a conta já tem o provedor do GitHub (só pode
   haver um). Importe-o: `terraform import aws_iam_openid_connect_provider.github arn:aws:iam::<conta>:oidc-provider/token.actions.githubusercontent.com`.
+- **`Not authorized to perform sts:AssumeRoleWithWebIdentity` no deploy**: o `sub` do token não
+  bateu com a trust policy. Veja o valor recebido no CloudTrail (evento
+  `AssumeRoleWithWebIdentity`) e compare com a seção *IDs do GitHub no claim `sub`*.
 - **EC2 não aparece no SSM**: espere alguns minutos; confira se ela tem o Elastic IP e se o
   security group permite saída.
 - **API não conecta no banco**: confira o volume `/certs` acima (e o `NODE_EXTRA_CA_CERTS`).
