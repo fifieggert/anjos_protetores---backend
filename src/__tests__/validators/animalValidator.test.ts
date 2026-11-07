@@ -48,6 +48,38 @@ describe("criarAnimalSchema", () => {
         expect(criarAnimalSchema.safeParse({ ...valido, fotoUrl: "https://exemplo.com/a.png" }).success).toBe(true);
     });
 
+    it("aceita em fotoUrl o caminho devolvido pelo upload de imagens", () => {
+        for (const ext of ["jpg", "png", "webp"]) {
+            const fotoUrl = `/api/imagens/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.${ext}`;
+            expect(criarAnimalSchema.parse({ ...valido, fotoUrl }).fotoUrl).toBe(fotoUrl);
+        }
+        expect(criarAnimalSchema.parse({ ...valido, fotoUrl: null }).fotoUrl).toBeNull();
+    });
+
+    it.each([
+        "/api/imagens/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.gif",
+        "/api/imagens/0F8B2C3D-1E2F-4A5B-8C6D-7E8F9A0B1C2D.jpg",
+        "/api/imagens/../../etc/passwd",
+        "/api/imagens/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.jpg?x=1",
+        "/outra/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.jpg",
+        "api/imagens/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.jpg",
+        "javascript:alert(1)",
+        "",
+    ])("recusa fotoUrl fora dos formatos aceitos: %s", (fotoUrl) => {
+        expect(errosDe(criarAnimalSchema, { ...valido, fotoUrl })).toEqual({
+            fotoUrl: "URL inválida. Use um endereço http(s) ou o caminho devolvido pelo envio de imagem (/api/imagens/...).",
+        });
+    });
+
+    it("mantém o limite de 191 caracteres na fotoUrl", () => {
+        const longa = `https://exemplo.com/${"a".repeat(172)}`;
+        expect(longa).toHaveLength(192);
+        expect(errosDe(criarAnimalSchema, { ...valido, fotoUrl: longa })).toEqual({
+            fotoUrl: "Deve ter no máximo 191 caracteres.",
+        });
+        expect(criarAnimalSchema.safeParse({ ...valido, fotoUrl: longa.slice(0, 191) }).success).toBe(true);
+    });
+
     it("transforma descrição vazia em null", () => {
         expect(criarAnimalSchema.parse({ ...valido, descricao: "   " }).descricao).toBeNull();
     });

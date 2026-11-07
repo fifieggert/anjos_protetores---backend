@@ -24,7 +24,9 @@ function registrar(app: typeof appCarregado, ip: string) {
     return request(app).post("/api/publico/interesses").set("X-Forwarded-For", ip).send(interesse);
 }
 
-describe("trust proxy e limitador de requisições", () => {
+// Cada teste importa o app do zero (a frio, ~1 s sozinho). Com a suíte inteira em paralelo e a
+// cobertura ligada, isso pode passar do timeout padrão de 5 s: folga só neste arquivo.
+describe("trust proxy e limitador de requisições", { timeout: 20_000 }, () => {
     it("com TRUST_PROXY=1 (atrás do Nginx), o limite é por IP real do X-Forwarded-For", async () => {
         const app = await appCom("1");
         prismaMock.solicitacaoAdocao.findFirst.mockResolvedValue(null);

@@ -1,4 +1,5 @@
 import { rateLimit } from "express-rate-limit";
+import { usuarioLogado } from "./authMiddleware";
 
 // Limite por IP para o formulário público de interesse (evita spam e reservas em massa).
 // Contagem em memória: zera quando o servidor reinicia. Atrás de um proxy (ex.: Render,
@@ -20,4 +21,15 @@ export const limiteTrocaSenha = rateLimit({
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: { error: "Muitas tentativas de trocar a senha. Tente novamente em alguns minutos." },
+});
+
+// Upload de imagens: cada envio ocupa memória e CPU (reencode). A contagem é por usuário (vem
+// depois do authMiddleware), porque os voluntários de um mesmo abrigo podem sair pelo mesmo IP.
+export const limiteUploads = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    keyGenerator: (req) => usuarioLogado(req).id,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "Muitos envios de imagens. Tente novamente em alguns minutos." },
 });

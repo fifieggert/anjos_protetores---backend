@@ -1,0 +1,94 @@
+import { randomUUID } from "node:crypto";
+import sharp from "sharp";
+import { AppError } from "../utils/AppError";
+import { exigirArmazenamento } from "../storage";
+import {
+    TIPOS_MIME,
+    chaveDaImagem,
+    ehArquivoImagem,
+    extensaoDoArquivo,
+    urlDaImagem,
+} from "../storage/chaves";
+import type { ExtensaoImagem } from "../storage/chaves";
+
+// Maior lado da imagem gravada: suficiente para a página do abrigo e bem mais leve que a
+// foto original do celular.
+export const LADO_MAXIMO = 1600;
+// Proteção contra "imagem-bomba" (arquivo pequeno que declara dimensões enormes e estoura a
+// memória ao ser aberto). 50 MP cobre as câmeras de celular atuais.
+export const LIMITE_PIXELS = 50_000_000;
+
+export const MENSAGEM_TIPO_INVALIDO = "Formato não suportado. Envie uma imagem JPEG, PNG ou WebP.";
+const MENSAGEM_IMAGEM_CORROMPIDA = "Não foi possível ler a imagem: o arquivo está corrompido ou não é JPEG, PNG ou WebP.";
+const MENSAGEM_DIMENSOES = `A imagem tem dimensões grandes demais (máximo de ${LIMITE_PIXELS / 1_000_000} megapixels).`;
+
+// Servidor pequeno (t3.micro, 1 GB): uma imagem por vez e sem cache de arquivos abertos.
+sharp.cache(false);
+sharp.concurrency(1);
+
+const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// Tipo pelo CONTEÚDO (magic bytes), nunca pelo nome do arquivo ou pelo Content-Type enviado.
+// Qualquer outro formato (SVG, GIF, HEIC, PDF, texto...) é recusado.
+export function detectarTipoImagem(conteudo: Buffer): ExtensaoImagem | null {
+    if (conteudo.length >= 3 && conteudo[0] === 0xff && conteudo[1] === 0xd8 && conteudo[2] === 0xff) return "jpg";
+    if (conteudo.subarray(0, 8).equals(ASSINATURA_PNG)) return "png";
+    if (
+        conteudo.length >= 12 &&
+        conteudo.toString("latin1", 0, 4) === "RIFF" &&
+        conteudo.toString("latin1", 8, 12) === "WEBP"
+    ) {
+        return "webp";
+    }
+    return null;
+}
+
+// Decodifica e grava de novo no mesmo formato. Isso:
+// - confirma que o arquivo é mesmo uma imagem válida (não só o começo dela);
+// - remove EXIF (incluindo a localização GPS da foto), comentários e qualquer conteúdo extra
+//   escondido no arquivo; a rotação do EXIF é aplicada antes, para a foto não ficar deitada;
+// - limita o maior lado a LADO_MAXIMO (sem ampliar imagens menores);
+// - em GIF/WebP animados, fica só o primeiro quadro.
+export async function reencodarImagem(conteudo: Buffer, tipo: ExtensaoImagem, limitePixels = LIMITE_PIXELS) {
+    const imagem = sharp(conteudo, { limitInputPixels: limitePixels, failOn: "error" })
+        .rotate()
+        .resize({ width: LADO_MAXIMO, height: LADO_MAXIMO, fit: "inside", withoutEnlargement: true });
+
+    const formatada =
+        tipo === "jpg" ? imagem.jpeg({ quality: 82 }) : tipo === "png" ? imagem.png() : imagem.webp({ quality: 80 });
+
+    try {
+        return await formatada.toBuffer();
+    } catch (erro) {
+        if (erro instanceof Error && erro.message.includes("pixel limit")) {
+            throw new AppError(413, MENSAGEM_DIMENSOES);
+        }
+        throw new AppError(415, MENSAGEM_IMAGEM_CORROMPIDA);
+    }
+}
+
+export class imagemService {
+    // Valida, reencoda e guarda a imagem com nome aleatório. Devolve o caminho público.
+    async salvar(conteudo: Buffer) {
+        const armazenamento = exigirArmazenamento();
+
+        const tipo = detectarTipoImagem(conteudo);
+        if (!tipo) throw new AppError(415, MENSAGEM_TIPO_INVALIDO);
+
+        const imagem = await reencodarImagem(conteudo, tipo);
+        const arquivo = `${randomUUID()}.${tipo}`;
+        await armazenamento.salvar(chaveDaImagem(arquivo), imagem, TIPOS_MIME[tipo]);
+
+        return { url: urlDaImagem(arquivo) };
+    }
+
+    // null quando a imagem não existe.
+    async ler(arquivo: string) {
+        if (!ehArquivoImagem(arquivo)) throw new AppError(400, "Nome de arquivo de imagem inválido.");
+
+        const conteudo = await exigirArmazenamento().ler(chaveDaImagem(arquivo));
+        if (!conteudo) return null;
+
+        return { conteudo, tipoMime: TIPOS_MIME[extensaoDoArquivo(arquivo)] };
+    }
+}

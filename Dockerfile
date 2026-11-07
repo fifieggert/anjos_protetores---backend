@@ -40,6 +40,10 @@ FROM base AS prod-deps
 ARG BUILD_DATABASE_URL
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
+# sharp (upload de imagens) usa binário pré-compilado que vem no pacote opcional da plataforma
+# (@img/sharp-linux-x64 + libvips), sem script de instalação. Se o binário não vier (lockfile
+# sem a entrada da plataforma), o build falha aqui, e não na primeira foto enviada.
+RUN node -e "require('sharp')"
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 RUN DATABASE_URL="$BUILD_DATABASE_URL" npx prisma generate

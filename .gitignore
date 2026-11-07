@@ -29,6 +29,9 @@ Thumbs.db
 # Testes
 coverage/
 
+# Upload de imagens com STORAGE_DRIVER=local (somente desenvolvimento)
+/uploads/
+
 # Terraform (infra/). O .terraform.lock.hcl NÃO é ignorado: ele deve ser versionado.
 infra/.terraform/
 infra/*.tfstate*

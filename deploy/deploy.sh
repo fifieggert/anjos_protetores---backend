@@ -7,7 +7,8 @@
 #
 # Passos:
 #   1. login no ECR e download (pull) das imagens novas
-#   2. lê os segredos do SSM Parameter Store e gera /opt/anjos/.env (permissão 600)
+#   2. lê os segredos (e o bucket de imagens) do SSM Parameter Store e gera
+#      /opt/anjos/.env (permissão 600)
 #   3. aplica as migrations do banco ("prisma migrate deploy") com a imagem NOVA,
 #      antes de trocar a API que está no ar
 #   4. sobe os containers novos (docker compose up -d)
@@ -82,13 +83,15 @@ JWT_SECRET="$(ler_parametro /anjos/jwt_secret)"
 DB_PASSWORD="$(ler_parametro /anjos/db_password)"
 ABRIGO_CIDADE="$(ler_opcional /anjos/abrigo_cidade)"
 ABRIGO_TELEFONE="$(ler_opcional /anjos/abrigo_telefone)"
+# Bucket do upload de imagens (não é segredo). Sem ele, a API sobe e o upload responde 503.
+S3_BUCKET="$(ler_opcional /anjos/s3_bucket)"
 
 [[ -n $DATABASE_URL && -n $JWT_SECRET && -n $DB_PASSWORD ]] || falha "parâmetro obrigatório vazio no SSM."
 unset DB_PASSWORD
 
 # Os valores vão entre aspas simples no .env (o docker compose não interpreta nada dentro
 # delas). Por isso não podem conter aspas simples nem quebra de linha.
-for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE; do
+for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE S3_BUCKET; do
   case "${!nome}" in
     *"'"* | *$'\n'*) falha "o parâmetro de $nome contém aspas simples ou quebra de linha." ;;
   esac
@@ -119,6 +122,10 @@ CORS_ORIGIN='https://$DOMINIO'
 TRUST_PROXY='1'
 ABRIGO_CIDADE='$ABRIGO_CIDADE'
 ABRIGO_TELEFONE='$ABRIGO_TELEFONE'
+
+# Upload de imagens (S3). As credenciais vêm da role da EC2 (IMDSv2), não daqui.
+AWS_REGION='$REGIAO'
+S3_BUCKET='$S3_BUCKET'
 EOF
 )
 chmod 600 "$ENV_ARQ.novo"

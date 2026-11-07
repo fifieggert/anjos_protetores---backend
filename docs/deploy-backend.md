@@ -17,6 +17,9 @@ Docker e CI. O deploy na AWS (CD) está em [deploy-aws.md](deploy-aws.md).
 | `TRUST_PROXY` | Número de proxies (Nginx, load balancer) à frente da API. Com 1 ou mais, o IP real vem do `X-Forwarded-For` e o limitador de requisições conta por visitante. Vazio/`0` = desligado | Não (padrão desligado) | `1` |
 | `ABRIGO_CIDADE` | Cidade no fecho do termo de adoção em PDF | Não | `Blumenau/SC` |
 | `ABRIGO_TELEFONE` | Telefone do abrigo no termo em PDF | Não | `(47) 3333-0000` |
+| `STORAGE_DRIVER` | Onde ficam as imagens enviadas (`POST /api/imagens`): `local` (pasta `./uploads`, **só desenvolvimento**) ou `s3`. Em produção, `local` é recusado. Valor inválido não derruba a API: só desabilita o upload (503) | Não (padrão `s3` em produção, `local` fora dela) | `s3` |
+| `S3_BUCKET` | Bucket privado das imagens. Sem ele, com `s3`, a API sobe normalmente e o upload responde 503. Não é segredo | Só para usar o upload com `s3` | `anjos-uploads-123456789012` |
+| `AWS_REGION` | Região do bucket. As credenciais vêm da cadeia padrão da AWS (na EC2, a role da instância): **nunca** use chaves de acesso em variáveis | Não (padrão `sa-east-1`) | `sa-east-1` |
 | `NODE_ENV` | Já vem `production` na imagem | Não | `production` |
 | `ADMIN_NOME`, `ADMIN_CPF`, `ADMIN_EMAIL`, `ADMIN_SENHA` | Só para o comando que cria o primeiro ADMIN | Só nesse comando | ver abaixo |
 
@@ -25,6 +28,8 @@ Gerar um `JWT_SECRET` aleatório:
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
+
+Upload de imagens (fluxo, validações e testes): ver [upload.md](upload.md).
 
 Sobre `TRUST_PROXY`: use o número exato de proxies. Sem proxy, deixe vazio: assim ninguém
 foge do limitador forjando o header `X-Forwarded-For`. Valores como `true` ou faixas de IP
@@ -141,9 +146,15 @@ em comentário.
 
 O `package-lock.json` foi regenerado do zero com o **npm 11.19.1** (o npm que vem com o Node
 24.22.1 do `.nvmrc`) e tem as entradas dos binários nativos de todas as plataformas
-(`@rolldown/binding-*`, `lightningcss-*`, `@oxlint/binding-*`, `@esbuild/*`). Por isso o CI e
-o Docker usam só `npm ci`, sem passos extras, e o mesmo lockfile serve para Windows, macOS e
-Linux (glibc e musl).
+(`@rolldown/binding-*`, `lightningcss-*`, `@oxlint/binding-*`, `@esbuild/*`, `@img/sharp-*`). Por
+isso o CI e o Docker usam só `npm ci`, sem passos extras, e o mesmo lockfile serve para
+Windows, macOS e Linux (glibc e musl).
+
+O `sharp` (reencode das imagens enviadas) não depende de script de instalação: o binário vem
+pronto no pacote opcional da plataforma (`@img/sharp-linux-x64` e `@img/sharp-libvips-linux-x64`
+na imagem Docker). Funciona também com `npm ci --ignore-scripts`. O `Dockerfile` roda
+`node -e "require('sharp')"` no estágio `prod-deps`, então um lockfile sem a entrada da
+plataforma quebra o build da imagem no CI, e não a primeira foto enviada em produção.
 
 Para atualizar o lockfile, use a mesma versão do npm, para não perder essas entradas:
 
