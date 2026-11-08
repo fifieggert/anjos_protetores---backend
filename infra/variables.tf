@@ -11,6 +11,12 @@ variable "project" {
   description = "Prefixo usado no nome dos recursos (ex.: anjos-backend) e no caminho dos parâmetros do SSM (/anjos/...)."
   type        = string
   default     = "anjos"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.project)) && length(var.project) <= 42
+    error_message = "project deve ter só letras minúsculas, números e hífen (sem começar ou terminar com hífen) e no máximo 42 caracteres, pois forma o nome do bucket S3."
+  }
+
 }
 
 variable "instance_type" {
@@ -81,3 +87,4 @@ variable "tags" {
     ManagedBy   = "terraform"
   }
 }
+
