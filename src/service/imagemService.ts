@@ -50,6 +50,22 @@ export function detectarTipoImagem(conteudo: Buffer): ExtensaoImagem | null {
 // - limita o maior lado a LADO_MAXIMO (sem ampliar imagens menores);
 // - em GIF/WebP animados, fica só o primeiro quadro.
 export async function reencodarImagem(conteudo: Buffer, tipo: ExtensaoImagem, limitePixels = LIMITE_PIXELS) {
+    // Confere as dimensões ANTES de decodificar: lê só o cabeçalho e não depende do texto
+    // de erro do sharp (que pode mudar entre versões).
+    // limitInputPixels: false é necessário aqui: o limite padrão do sharp (~268 MP) também vale
+    // para o metadata(), que então LANÇA para imagens maiores que isso, e uma imagem-bomba
+    // viraria 415 em vez de 413. Nada é decodificado nesta etapa; o limite real é conferido
+    // logo abaixo com limitePixels.
+    let largura: number | undefined;
+    let altura: number | undefined;
+    try {
+        ({ width: largura, height: altura } = await sharp(conteudo, { failOn: "none", limitInputPixels: false }).metadata());
+    } catch {
+        throw new AppError(415, MENSAGEM_IMAGEM_CORROMPIDA);
+    }
+    if (!largura || !altura) throw new AppError(415, MENSAGEM_IMAGEM_CORROMPIDA);
+    if (largura * altura > limitePixels) throw new AppError(413, MENSAGEM_DIMENSOES);
+
     const imagem = sharp(conteudo, { limitInputPixels: limitePixels, failOn: "error" })
         .rotate()
         .resize({ width: LADO_MAXIMO, height: LADO_MAXIMO, fit: "inside", withoutEnlargement: true });
@@ -59,10 +75,7 @@ export async function reencodarImagem(conteudo: Buffer, tipo: ExtensaoImagem, li
 
     try {
         return await formatada.toBuffer();
-    } catch (erro) {
-        if (erro instanceof Error && erro.message.includes("pixel limit")) {
-            throw new AppError(413, MENSAGEM_DIMENSOES);
-        }
+    } catch {
         throw new AppError(415, MENSAGEM_IMAGEM_CORROMPIDA);
     }
 }

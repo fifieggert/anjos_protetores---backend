@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, zerarLimites } from "../helpers/app";
 import { comoAdmin, comoVoluntario } from "../helpers/auth";
 import { ArmazenamentoMemoria } from "../helpers/armazenamento";
+import { esperarAppError } from "../helpers/erros";
 import { definirArmazenamento } from "../../storage";
 import { detectarTipoImagem, reencodarImagem } from "../../service/imagemService";
 
@@ -346,5 +347,41 @@ describe("detectarTipoImagem e reencodarImagem", () => {
         const imagem = await criarImagem("png", 100, 100);
         await expect(reencodarImagem(imagem, "png", 100 * 100)).resolves.toBeInstanceOf(Buffer);
         await expect(reencodarImagem(imagem, "png", 100 * 100 - 1)).rejects.toMatchObject({ status: 413 });
+    });
+
+    it("imagem real válida dentro do limite é reencodada com as mesmas dimensões", async () => {
+        const saida = await reencodarImagem(await criarImagem("png", 300, 200), "png");
+        expect(await sharp(saida).metadata()).toMatchObject({ format: "png", width: 300, height: 200 });
+    });
+
+    it("imagem real acima do limite dá 413", async () => {
+        const imagem = await criarImagem("png", 300, 300);
+        await esperarAppError(reencodarImagem(imagem, "png", 10_000), 413, /dimensões grandes demais/);
+    });
+
+    // Os dados destes PNGs não formam a imagem declarada: se fossem decodificados, dariam 415.
+    // O 413 mostra que a recusa vem só do cabeçalho, antes de decodificar.
+    it.each([
+        ["acima do limite do projeto (8000x8000 = 64 MP)", 8000, 8000],
+        ["acima até do limite padrão do sharp (20000x20000 = 400 MP)", 20_000, 20_000],
+    ])("imagem-bomba %s dá 413 sem decodificar", async (_caso, largura, altura) => {
+        await esperarAppError(reencodarImagem(pngGigante(largura, altura), "png"), 413);
+    });
+
+    it("arquivo corrompido dá 415: cabeçalho ilegível ou dados truncados", async () => {
+        const lixo = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("lixo".repeat(50))]);
+        await esperarAppError(reencodarImagem(lixo, "jpg"), 415, /corrompido/);
+
+        const real = await criarImagem("png", 300, 300);
+        const truncado = real.subarray(0, Math.floor(real.length / 2));
+        await esperarAppError(reencodarImagem(truncado, "png"), 415, /corrompido/);
+    });
+
+    // Proteção: um arquivo real com dimensão 0 já faz o metadata() lançar; aqui simulamos o
+    // sharp devolvendo metadados sem largura/altura.
+    it("metadados sem largura ou altura dão 415", async () => {
+        const imagem = await criarImagem("png");
+        vi.spyOn(sharp.prototype, "metadata").mockResolvedValueOnce({ width: 100 } as never);
+        await esperarAppError(reencodarImagem(imagem, "png"), 415, /corrompido/);
     });
 });
