@@ -293,6 +293,39 @@ describe("GET /api/imagens/:arquivo", () => {
         const res = await api().get(`/api/imagens/${ARQUIVO}.png`);
         expect(res.status).toBe(503);
     });
+
+    it("limite folgado de 300 leituras por IP por minuto: dentro dele serve normalmente, acima dá 429", async () => {
+        await memoria.salvar(`uploads/${ARQUIVO}.jpg`, Buffer.from("x"), "image/jpeg");
+        const ler = () => api().get(`/api/imagens/${ARQUIVO}.jpg`);
+
+        for (let i = 0; i < 300; i++) {
+            const res = await ler();
+            expect(res.status).toBe(200);
+            expect(res.headers["content-type"]).toBe("image/jpeg");
+        }
+
+        const lerSpy = vi.spyOn(memoria, "ler");
+        const bloqueado = await ler();
+        expect(bloqueado.status).toBe(429);
+        expect(bloqueado.body).toEqual({ error: "Muitas requisições de imagens. Tente novamente em instantes." });
+        expect(bloqueado.headers["ratelimit-policy"]).toMatch(/^"300-in-1min"; q=300; w=60;/);
+        expect(lerSpy).not.toHaveBeenCalled();
+    });
+
+    it("estourar o limite de leitura não afeta o upload, e os envios não contam para a leitura", async () => {
+        await memoria.salvar(`uploads/${ARQUIVO}.png`, Buffer.from("x"), "image/png");
+        for (let i = 0; i < 300; i++) await api().get(`/api/imagens/${ARQUIVO}.png`);
+        expect((await api().get(`/api/imagens/${ARQUIVO}.png`)).status).toBe(429);
+
+        const envio = await enviar(await criarImagem("png"), "a.png", "image/png");
+        expect(envio.status).toBe(201);
+
+        await zerarLimites();
+        for (let i = 0; i < 29; i++) {
+            expect((await api().post("/api/imagens").set("Authorization", comoAdmin())).status).toBe(400);
+        }
+        expect((await api().get(`/api/imagens/${ARQUIVO}.png`)).status).toBe(200);
+    });
 });
 
 describe("detectarTipoImagem e reencodarImagem", () => {

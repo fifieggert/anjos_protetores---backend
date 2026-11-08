@@ -1,6 +1,6 @@
 import request from "supertest";
 import app from "../../app";
-import { limiteInteresses, limiteTrocaSenha, limiteUploads } from "../../middleware/limiteRequisicoes";
+import { limiteInteresses, limiteLeituraImagens, limiteTrocaSenha, limiteUploads } from "../../middleware/limiteRequisicoes";
 import { ID_ADMIN, ID_VOLUNTARIO } from "./auth";
 
 // O supertest sobe o app numa porta local temporária (sem app.listen do server.ts).
@@ -14,6 +14,7 @@ export async function zerarLimites() {
     for (const ip of IPS_LOCAIS) {
         await limiteInteresses.resetKey(ip);
         await limiteTrocaSenha.resetKey(ip);
+        await limiteLeituraImagens.resetKey(ip);
     }
     // o limite de uploads conta por usuário
     for (const id of [ID_ADMIN, ID_VOLUNTARIO]) {

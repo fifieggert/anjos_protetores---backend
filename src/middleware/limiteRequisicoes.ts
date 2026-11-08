@@ -33,3 +33,15 @@ export const limiteUploads = rateLimit({
     legacyHeaders: false,
     message: { error: "Muitos envios de imagens. Tente novamente em alguns minutos." },
 });
+
+// Leitura pública das imagens: cada requisição fora do cache do navegador vira uma leitura no
+// S3. O limite é folgado de propósito: uma listagem de animais carrega dezenas de fotos de uma
+// vez, e redes compartilhadas (o abrigo, uma faculdade, NAT de operadora) juntam vários
+// visitantes no mesmo IP. Serve só para frear abuso automatizado.
+export const limiteLeituraImagens = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 300,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "Muitas requisições de imagens. Tente novamente em instantes." },
+});

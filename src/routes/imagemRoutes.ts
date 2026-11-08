@@ -2,7 +2,7 @@ import { Router } from "express";
 import { PerfilUsuario } from "@prisma/client";
 import { imagemController } from "../controller/imagemController";
 import { authMiddleware, permitirPerfis } from "../middleware/authMiddleware";
-import { limiteUploads } from "../middleware/limiteRequisicoes";
+import { limiteLeituraImagens, limiteUploads } from "../middleware/limiteRequisicoes";
 import { armazenamentoDisponivel, receberImagem } from "../middleware/uploadImagem";
 
 const router = Router();
@@ -20,7 +20,7 @@ router.post(
     controller.upload.bind(controller),
 );
 
-// Leitura pública das imagens (o nome é validado no imagemService).
-router.get("/:arquivo", controller.ler.bind(controller));
+// Leitura pública das imagens (o nome é validado no imagemService), com limite folgado por IP.
+router.get("/:arquivo", limiteLeituraImagens, controller.ler.bind(controller));
 
 export default router;

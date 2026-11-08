@@ -35,6 +35,7 @@ caracteres).
 | Começa como imagem mas não decodifica (corrompido ou disfarçado) | 415 |
 | Mais de **50 megapixels** declarados no cabeçalho (imagem-bomba), recusada antes de decodificar | 413 |
 | Mais de **30 envios por usuário a cada 15 min** | 429 |
+| `GET`: mais de **300 leituras por IP por minuto** (folgado de propósito: uma listagem carrega dezenas de fotos de uma vez e redes compartilhadas, como o abrigo, a faculdade ou NAT de operadora, juntam vários visitantes num IP; com o cache de 1 ano no navegador, quem volta nem chega à API. Serve para frear abuso que geraria leituras no S3) | 429 `Muitas requisições de imagens...` |
 
 O que acontece com uma imagem aceita (`sharp`):
 
