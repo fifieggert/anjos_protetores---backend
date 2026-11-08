@@ -103,12 +103,16 @@ resource "aws_instance" "app" {
 
   # IMDSv2 obrigatório: o serviço de metadados (de onde saem as credenciais da role) só responde
   # com token de sessão, o que bloqueia ataques de SSRF que tentam roubar essas credenciais.
-  # hop_limit = 1 impede que os containers (um "salto" a mais na rede) cheguem ao serviço:
-  # só o host usa a role; os containers recebem as variáveis prontas.
+  # hop_limit = 2: a resposta do token atravessa um "salto" a mais na rede (a bridge do
+  # Docker), para que o container da API use as credenciais da role (SDK da AWS) e grave as
+  # imagens no S3 sem chave de acesso fixa. Com 1, só o host alcançava o serviço.
+  # Efeito colateral: qualquer container da máquina (api, web, caddy) passa a conseguir as
+  # credenciais da role. Por isso a role tem só o mínimo (ver ec2_app e ec2_uploads).
+  # Mudar este valor não recria a EC2 (a AWS altera na hora, sem reiniciar).
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
-    http_put_response_hop_limit = 1
+    http_put_response_hop_limit = 2
   }
 
   # Disco de 20 GB gp3 (mais barato e rápido que o gp2), criptografado em repouso.

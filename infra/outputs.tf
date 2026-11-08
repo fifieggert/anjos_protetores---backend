@@ -49,6 +49,16 @@ output "ssm_parametros" {
   ]
 }
 
+output "uploads_bucket" {
+  description = "Bucket S3 privado dos uploads de imagens (a API grava em uploads/). Também fica em /anjos/s3_bucket no SSM."
+  value       = aws_s3_bucket.uploads.bucket
+}
+
+output "uploads_regiao" {
+  description = "Região do bucket de uploads (valor de AWS_REGION na API)."
+  value       = aws_s3_bucket.uploads.region
+}
+
 output "comando_ssm_sessao" {
   description = "Comando para abrir um terminal na EC2 sem SSH (precisa do Session Manager plugin)."
   value       = "aws ssm start-session --target ${aws_instance.app.id} --region ${var.region}"
