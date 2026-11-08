@@ -169,17 +169,20 @@ describe("ArmazenamentoS3 (cliente falso, sem rede)", () => {
         ).toBeNull();
     });
 
-    it("403 (chave inexistente sem ListBucket) devolve null e avisa no log uma vez só", async () => {
+    // Com ListBucket na role, chave inexistente é 404. Um 403 é falta de permissão de verdade.
+    it("403 (permissão negada) é repassado, não vira imagem inexistente", async () => {
         const aviso = vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const { s3 } = criar(async () => {
             throw erroS3(403, "AccessDenied");
         });
-        expect(await s3.ler("uploads/a.jpg")).toBeNull();
-        expect(await s3.ler("uploads/b.jpg")).toBeNull();
-        expect(aviso).toHaveBeenCalledTimes(1);
+        await expect(s3.ler("uploads/a.jpg")).rejects.toMatchObject({
+            name: "AccessDenied",
+            $metadata: { httpStatusCode: 403 },
+        });
+        expect(aviso).not.toHaveBeenCalled();
     });
 
-    it("repassa outros erros do S3", async () => {
+    it("repassa outros erros do S3 (500, sem status, sem rede)", async () => {
         const { s3 } = criar(async () => {
             throw erroS3(500, "InternalError");
         });
