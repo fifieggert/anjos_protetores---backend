@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { lerTrustProxy } from "../utils/trustProxy";
+import { resolverConfigArmazenamento } from "../storage/config";
+import type { ConfigArmazenamento } from "../storage/config";
 
 function encerrarComErro(mensagem: string): never {
     console.error(`[config] ${mensagem}`);
@@ -67,3 +69,15 @@ function variavelOpcional(nome: string): string | null {
 
 export const ABRIGO_CIDADE = variavelOpcional("ABRIGO_CIDADE");
 export const ABRIGO_TELEFONE = variavelOpcional("ABRIGO_TELEFONE");
+
+// Upload de imagens (STORAGE_DRIVER, S3_BUCKET, AWS_REGION). Configuração incompleta não
+// impede a API de subir: só o upload fica desabilitado (503). Ver storage/config.ts.
+function configArmazenamento(): ConfigArmazenamento {
+    const config = resolverConfigArmazenamento(process.env);
+    if (config.driver === "desabilitado") {
+        console.warn(`[config] Upload de imagens desabilitado: ${config.motivo}`);
+    }
+    return config;
+}
+
+export const CONFIG_ARMAZENAMENTO = configArmazenamento();

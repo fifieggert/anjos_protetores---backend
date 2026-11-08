@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_TEXTO, diaObrigatorio, horarioSchema, paraAtualizacao } from "./comum";
+import { MAX_TEXTO, diaObrigatorio, horarioSchema, paraAtualizacao, urlImagem } from "./comum";
 
 const MIN_TITULO = 3;
 const MAX_TITULO = 100;
@@ -21,8 +21,8 @@ const eventoSchema = z.strictObject({
     horarioInicio: horarioSchema(),
     horarioFim: horarioSchema().nullable().optional(),
     local: z.string().trim().min(MIN_LOCAL, { error: `O local deve ter no mínimo ${MIN_LOCAL} caracteres.` }).max(MAX_TEXTO),
-    // mesma regra da fotoUrl do animal: só http ou https
-    imagemUrl: z.url({ protocol: /^https?$/ }).max(MAX_URL_IMAGEM).nullable().optional(),
+    // mesma regra da fotoUrl do animal: http/https ou caminho do upload (/api/imagens/<arquivo>)
+    imagemUrl: urlImagem(MAX_URL_IMAGEM),
 });
 
 export const MENSAGEM_HORARIO_FIM = "O horário de término deve ser depois do horário de início.";

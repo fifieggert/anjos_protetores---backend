@@ -1,5 +1,7 @@
 # Gerados ou instalados dentro da imagem
 node_modules
+# imagens do upload local (desenvolvimento)
+uploads
 dist
 coverage
 generated

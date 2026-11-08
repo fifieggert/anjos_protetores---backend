@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { diaNoFuso } from "../utils/datas";
+import { ehUrlInternaImagem } from "../storage/chaves";
 
 // Limite das colunas String do Prisma no MySQL (VARCHAR(191)).
 export const MAX_TEXTO = 191;
@@ -53,6 +54,20 @@ z.config({
 });
 
 export const idSchema = z.uuid();
+
+const urlHttp = z.url({ protocol: /^https?$/ });
+
+// fotoUrl (animal) e imagemUrl (evento): URL http/https externa OU o caminho devolvido pelo
+// upload (POST /api/imagens), ex.: /api/imagens/<uuid>.webp. Aceita null para limpar.
+export const urlImagem = (max: number) =>
+    z
+        .string()
+        .max(max)
+        .refine((valor) => urlHttp.safeParse(valor).success || ehUrlInternaImagem(valor), {
+            error: "URL inválida. Use um endereço http(s) ou o caminho devolvido pelo envio de imagem (/api/imagens/...).",
+        })
+        .nullable()
+        .optional();
 
 export const textoObrigatorio = () => z.string().trim().min(1).max(MAX_TEXTO);
 

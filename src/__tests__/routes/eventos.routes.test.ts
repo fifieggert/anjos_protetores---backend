@@ -73,8 +73,9 @@ describe("/api/eventos", () => {
     });
 
     it("DELETE remove", async () => {
+        prismaMock.evento.delete.mockResolvedValue({ imagemUrl: null } as never);
         const res = await api().delete(`/api/eventos/${EVENTO}`).set("Authorization", comoAdmin());
         expect(res.status).toBe(200);
-        expect(prismaMock.evento.delete).toHaveBeenCalledWith({ where: { id: EVENTO } });
+        expect(prismaMock.evento.delete).toHaveBeenCalledWith({ where: { id: EVENTO }, select: { imagemUrl: true } });
     });
 });
