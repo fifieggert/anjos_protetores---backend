@@ -57,16 +57,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
   }
 }
 
-# Versionamento desligado: uma foto apagada ou substituída não fica guardada (e cobrada) em
-# versões antigas. "Disabled" só vale para bucket que nunca teve versionamento, que é o caso.
-resource "aws_s3_bucket_versioning" "uploads" {
-  bucket = aws_s3_bucket.uploads.id
-
-  versioning_configuration {
-    status = "Disabled"
-  }
-}
-
 # Uploads grandes podem ser enviados em partes (multipart). Se o envio for interrompido, as
 # partes ficam no bucket, invisíveis e cobradas. Esta regra as apaga após 1 dia.
 resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
