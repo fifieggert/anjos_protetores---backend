@@ -6,7 +6,7 @@ import { comoAdmin, comoVoluntario } from "../helpers/auth";
 import { ArmazenamentoMemoria } from "../helpers/armazenamento";
 import { esperarAppError } from "../helpers/erros";
 import { definirArmazenamento } from "../../storage";
-import { detectarTipoImagem, reencodarImagem } from "../../service/imagemService";
+import { LIMITE_PIXELS, detectarTipoImagem, reencodarImagem } from "../../service/imagemService";
 
 const URL_IMAGEM = /^\/api\/imagens\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp)$/;
 const TIPO_INVALIDO = "Formato não suportado. Envie uma imagem JPEG, PNG ou WebP.";
@@ -152,7 +152,7 @@ describe("POST /api/imagens", () => {
     it("imagem-bomba (dimensões enormes) dá 413 sem ser decodificada", async () => {
         const res = await enviar(pngGigante(20_000, 20_000), "bomba.png", "image/png");
         expect(res.status).toBe(413);
-        expect(res.body).toEqual({ error: "A imagem tem dimensões grandes demais (máximo de 50 megapixels)." });
+        expect(res.body).toEqual({ error: "A imagem tem dimensões grandes demais (máximo de 25 megapixels)." });
     });
 
     it("sem arquivo dá 400", async () => {
@@ -362,7 +362,8 @@ describe("detectarTipoImagem e reencodarImagem", () => {
     // Os dados destes PNGs não formam a imagem declarada: se fossem decodificados, dariam 415.
     // O 413 mostra que a recusa vem só do cabeçalho, antes de decodificar.
     it.each([
-        ["acima do limite do projeto (8000x8000 = 64 MP)", 8000, 8000],
+        ["logo acima do limite de 25 MP (5001x5000)", 5001, 5000],
+        ["acima do antigo limite de 50 MP (8000x8000 = 64 MP)", 8000, 8000],
         ["acima até do limite padrão do sharp (20000x20000 = 400 MP)", 20_000, 20_000],
     ])("imagem-bomba %s dá 413 sem decodificar", async (_caso, largura, altura) => {
         await esperarAppError(reencodarImagem(pngGigante(largura, altura), "png"), 413);
@@ -375,6 +376,48 @@ describe("detectarTipoImagem e reencodarImagem", () => {
         const real = await criarImagem("png", 300, 300);
         const truncado = real.subarray(0, Math.floor(real.length / 2));
         await esperarAppError(reencodarImagem(truncado, "png"), 415, /corrompido/);
+    });
+
+    it("o limite padrão é 25 MP", () => {
+        expect(LIMITE_PIXELS).toBe(25_000_000);
+    });
+
+    // Fila: duas imagens enviadas juntas nunca são processadas ao mesmo tempo.
+    it("processa uma imagem por vez: a segunda só começa depois que a primeira termina", async () => {
+        const original = sharp.prototype.metadata;
+        const liberarPrimeira: { abrir?: () => void } = {};
+        const portao = new Promise<void>((resolve) => (liberarPrimeira.abrir = resolve));
+        const chamadas: number[] = [];
+        vi.spyOn(sharp.prototype, "metadata").mockImplementation(async function (this: sharp.Sharp) {
+            chamadas.push(chamadas.length + 1);
+            if (chamadas.length === 1) await portao;
+            return original.call(this);
+        } as never);
+
+        const ordem: string[] = [];
+        const primeira = reencodarImagem(await criarImagem("png", 200, 200), "png").then(() => ordem.push("primeira"));
+        const segunda = reencodarImagem(await criarImagem("jpeg"), "jpg").then(() => ordem.push("segunda"));
+
+        await new Promise((r) => setTimeout(r, 20));
+        // a primeira está parada no metadata(); a segunda ainda nem começou
+        expect(chamadas).toEqual([1]);
+
+        liberarPrimeira.abrir?.();
+        await Promise.all([primeira, segunda]);
+        expect(chamadas).toEqual([1, 2]);
+        expect(ordem).toEqual(["primeira", "segunda"]);
+    });
+
+    it("uma imagem recusada não trava a fila", async () => {
+        const lixo = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("lixo".repeat(50))]);
+        const [corrompida, bomba, valida] = await Promise.allSettled([
+            reencodarImagem(lixo, "jpg"),
+            reencodarImagem(pngGigante(8000, 8000), "png"),
+            reencodarImagem(await criarImagem("webp"), "webp"),
+        ]);
+        expect(corrompida).toMatchObject({ status: "rejected", reason: { status: 415 } });
+        expect(bomba).toMatchObject({ status: "rejected", reason: { status: 413 } });
+        expect(valida).toMatchObject({ status: "fulfilled" });
     });
 
     // Proteção: um arquivo real com dimensão 0 já faz o metadata() lançar; aqui simulamos o

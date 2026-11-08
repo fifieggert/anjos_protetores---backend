@@ -33,7 +33,7 @@ caracteres).
 | Arquivo acima de **5 MB** (multer, em memória) | 413 `A imagem deve ter no máximo 5 MB.` |
 | Tipo diferente de **JPEG, PNG ou WebP**, conferido pelos *magic bytes* do conteúdo (nome e `Content-Type` enviados são ignorados). SVG, GIF, HEIC, PDF etc. são recusados | 415 `Formato não suportado...` |
 | Começa como imagem mas não decodifica (corrompido ou disfarçado) | 415 |
-| Mais de **50 megapixels** declarados no cabeçalho (imagem-bomba), recusada antes de decodificar | 413 |
+| Mais de **25 megapixels** (largura × altura) declarados no cabeçalho (imagem-bomba), recusada antes de decodificar | 413 `A imagem tem dimensões grandes demais (máximo de 25 megapixels).` |
 | Mais de **30 envios por usuário a cada 15 min** | 429 |
 | `GET`: mais de **300 leituras por IP por minuto** (folgado de propósito: uma listagem carrega dezenas de fotos de uma vez e redes compartilhadas, como o abrigo, a faculdade ou NAT de operadora, juntam vários visitantes num IP; com o cache de 1 ano no navegador, quem volta nem chega à API. Serve para frear abuso que geraria leituras no S3) | 429 `Muitas requisições de imagens...` |
 
@@ -58,6 +58,41 @@ O que acontece com uma imagem aceita (`sharp`):
   desenvolvimento) conseguir exibir a imagem.
 
 Em produção, o Caddy também recusa corpos acima de 6 MB em `/api/imagens*` (`deploy/Caddyfile`).
+
+## Memória: limite de 25 MP e fila de processamento
+
+A EC2 é uma t3.micro (1 GB) e o sharp precisa de memória proporcional aos pixels. Por isso:
+
+- **Uma imagem por vez**: o metadata + reencode de cada envio passa por uma fila dentro do
+  processo (`src/utils/filaUnica.ts`). Envios simultâneos esperam a vez, na ordem de chegada;
+  um envio recusado (413/415) ou com erro não trava a fila. `sharp.concurrency(1)` sozinho
+  não bastava: ele limita as threads do libvips **por imagem**, não o número de imagens.
+- **Limite de 25 MP** (era 50): cobre fotos de celular no modo padrão (12 a 24 MP).
+
+Não há timeout de resposta na API para a espera na fila: o Express não define um, o
+`server.requestTimeout` do Node (300 s) só conta até o corpo terminar de chegar (o multer lê o
+arquivo antes de a imagem entrar na fila) e o `reverse_proxy` do Caddy não tem timeout de
+resposta por padrão. Como cada imagem leva décimos de segundo, a espera é curta (medido: o 4º
+de 4 envios simultâneos do pior caso terminou em 1,6 s).
+
+Pico de memória medido (RSS a mais que o processo parado, Node 24 + sharp 0.34.5 / libvips
+8.17.3 no Debian, imagens de 6000 × 4000 = 24 MP, pelo `imagemService.salvar` real):
+
+| Imagem (24 MP) | 1 envio | 2 simultâneos sem fila | 2 simultâneos com fila | 4 simultâneos sem fila | 4 simultâneos com fila |
+|---|---|---|---|---|---|
+| JPEG (4,4 MB) | 24 MB | 47 MB | 41 MB | 93 MB | 62 MB |
+| JPEG com EXIF de retrato (rotate) | 28 MB | 55 MB | 33 MB | 110 MB | 60 MB |
+| WebP | 24 MB | 48 MB | 33 MB | 96 MB | 61 MB |
+| PNG | 30 MB | 60 MB | 53 MB | 120 MB | 89 MB |
+| PNG entrelaçado (decodificado inteiro) | 88 MB | 176 MB | 101 MB | 347 MB | 126 MB |
+| PNG RGBA entrelaçado (pior caso) | 133 MB | 266 MB | 159 MB | 531 MB | 204–222 MB |
+
+O arquivo RGBA usado na medição tem 19 MB (acima dos 5 MB do upload); ele serve como teto,
+porque a memória depende dos pixels, não do tamanho do arquivo.
+
+Sem a fila, o pico cresce com o número de envios simultâneos; com ela, fica perto do de uma
+imagem só. JPEG e WebP são decodificados já reduzidos e em faixas, então gastam pouco; o PNG
+entrelaçado é o que precisa da imagem inteira na memória.
 
 ## Limpeza das imagens antigas
 
@@ -90,7 +125,8 @@ apagadas automaticamente.
 | `src/storage/chaves.ts` | Formato do nome, da chave (`uploads/...`) e da URL; `chaveDaUrlInterna` converte o valor gravado na chave |
 | `src/storage/limparImagem.ts` | Apaga a imagem antiga quando ninguém mais a usa (nunca lança) |
 | `src/middleware/uploadImagem.ts` | multer (`memoryStorage`, limites) e tradução dos erros |
-| `src/service/imagemService.ts` | Magic bytes, reencode, gravação e leitura |
+| `src/service/imagemService.ts` | Magic bytes, limite de pixels, reencode (pela fila), gravação e leitura |
+| `src/utils/filaUnica.ts` | Fila que executa uma tarefa por vez (usada no processamento das imagens) |
 | `src/routes/imagemRoutes.ts` | Rotas e ordem dos middlewares |
 
 ## Configuração

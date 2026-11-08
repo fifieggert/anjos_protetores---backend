@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { AppError } from "../utils/AppError";
+import { criarFilaUnica } from "../utils/filaUnica";
 import { exigirArmazenamento } from "../storage";
 import {
     TIPOS_MIME,
@@ -15,16 +16,24 @@ import type { ExtensaoImagem } from "../storage/chaves";
 // foto original do celular.
 export const LADO_MAXIMO = 1600;
 // Proteção contra "imagem-bomba" (arquivo pequeno que declara dimensões enormes e estoura a
-// memória ao ser aberto). 50 MP cobre as câmeras de celular atuais.
-export const LIMITE_PIXELS = 50_000_000;
+// memória ao ser aberto). 25 MP cobre fotos de celular no modo padrão (12 a 24 MP) e limita o
+// pior caso medido (PNG entrelaçado, decodificado inteiro na memória) a algumas centenas de MB
+// (números em docs/upload.md).
+export const LIMITE_PIXELS = 25_000_000;
 
 export const MENSAGEM_TIPO_INVALIDO = "Formato não suportado. Envie uma imagem JPEG, PNG ou WebP.";
 const MENSAGEM_IMAGEM_CORROMPIDA = "Não foi possível ler a imagem: o arquivo está corrompido ou não é JPEG, PNG ou WebP.";
 const MENSAGEM_DIMENSOES = `A imagem tem dimensões grandes demais (máximo de ${LIMITE_PIXELS / 1_000_000} megapixels).`;
 
-// Servidor pequeno (t3.micro, 1 GB): uma imagem por vez e sem cache de arquivos abertos.
+// Servidor pequeno (t3.micro, 1 GB): sem cache de arquivos abertos e uma thread do libvips
+// por imagem. sharp.concurrency(1) NÃO impede duas requisições de processarem ao mesmo tempo
+// (cada uma vai para uma thread do libuv); quem garante uma imagem por vez é a fila abaixo.
 sharp.cache(false);
 sharp.concurrency(1);
+
+// Uma imagem por vez no processo (metadata + reencode). Quem chega depois espera a vez; a
+// espera é curta (cada imagem leva décimos de segundo) e não há timeout de resposta na API.
+const filaImagens = criarFilaUnica();
 
 const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -49,7 +58,12 @@ export function detectarTipoImagem(conteudo: Buffer): ExtensaoImagem | null {
 //   escondido no arquivo; a rotação do EXIF é aplicada antes, para a foto não ficar deitada;
 // - limita o maior lado a LADO_MAXIMO (sem ampliar imagens menores);
 // - em GIF/WebP animados, fica só o primeiro quadro.
-export async function reencodarImagem(conteudo: Buffer, tipo: ExtensaoImagem, limitePixels = LIMITE_PIXELS) {
+// Passa pela fila: nunca há duas imagens sendo processadas ao mesmo tempo.
+export function reencodarImagem(conteudo: Buffer, tipo: ExtensaoImagem, limitePixels = LIMITE_PIXELS) {
+    return filaImagens(() => processarImagem(conteudo, tipo, limitePixels));
+}
+
+async function processarImagem(conteudo: Buffer, tipo: ExtensaoImagem, limitePixels: number) {
     // Confere as dimensões ANTES de decodificar: lê só o cabeçalho e não depende do texto
     // de erro do sharp (que pode mudar entre versões).
     // limitInputPixels: false é necessário aqui: o limite padrão do sharp (~268 MP) também vale
