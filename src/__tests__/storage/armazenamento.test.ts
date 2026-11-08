@@ -199,6 +199,13 @@ describe("ArmazenamentoS3 (cliente falso, sem rede)", () => {
         expect(comando.input).toEqual({ Bucket: "anjos-uploads-teste", Key: "uploads/a.png" });
     });
 
+    it("repassa erro ao remover (quem trata é o storage/limparImagem.ts)", async () => {
+        const { s3 } = criar(async () => {
+            throw erroS3(503, "ServiceUnavailable");
+        });
+        await expect(s3.remover("uploads/a.png")).rejects.toThrow("ServiceUnavailable");
+    });
+
     it("ArmazenamentoS3.criar monta o cliente na região informada (credenciais pela cadeia padrão)", async () => {
         const s3 = ArmazenamentoS3.criar("b", "sa-east-1");
         const cliente = (s3 as unknown as { cliente: S3Client }).cliente;

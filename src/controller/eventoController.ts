@@ -45,7 +45,8 @@ export class eventoController {
     }
 
     async delete(req: Request, res: Response) {
-        await repository.delete(req.params.id as string);
+        // a imagem é apagada do armazenamento no service, depois do delete no banco
+        await service.excluir(req.params.id as string);
         return res.status(200).send({"message": "Evento deletado com sucesso"});
     }
 }

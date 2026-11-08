@@ -59,6 +59,26 @@ O que acontece com uma imagem aceita (`sharp`):
 
 Em produção, o Caddy também recusa corpos acima de 6 MB em `/api/imagens*` (`deploy/Caddyfile`).
 
+## Limpeza das imagens antigas
+
+Quando a imagem deixa de ser usada, o arquivo é apagado do armazenamento
+(`src/storage/limparImagem.ts`, chamado pelos services de animal e evento):
+
+| Situação | O que acontece |
+|---|---|
+| `PUT` com `fotoUrl`/`imagemUrl` trocada ou `null` | a antiga é apagada **depois** que o update no banco deu certo |
+| `PUT` com o mesmo valor, ou sem o campo | nada é apagado |
+| `DELETE` do animal/evento | a imagem dele é apagada depois do delete no banco |
+| Valor antigo é URL externa ou fora do formato `/api/imagens/<uuid>.<jpg\|png\|webp>` | nada é apagado (só apagamos imagens nossas) |
+| Outro animal ou evento ainda usa a mesma imagem | nada é apagado |
+| Update/delete falhou no banco | nada é apagado |
+| Falha ao apagar (S3 fora, banco indisponível na conferência) | a requisição continua com sucesso e a resposta não muda; o log mostra `[armazenamento] Falha ao remover a imagem uploads/<arquivo>: <tipo do erro>` (sem mensagem do erro, bucket ou dados do registro) e o arquivo fica órfão |
+
+A conferência de "ainda em uso" consulta todas as colunas de imagem (`Animal.fotoUrl` e
+`Evento.imagemUrl`). Ao criar outro campo de imagem no schema, inclua-o em `imagemEmUso`.
+Imagens enviadas pelo `POST /api/imagens` e nunca gravadas em nenhum registro não são
+apagadas automaticamente.
+
 ## Código
 
 | Arquivo | Papel |
@@ -67,7 +87,8 @@ Em produção, o Caddy também recusa corpos acima de 6 MB em `/api/imagens*` (`
 | `src/storage/s3.ts` | Driver S3 (`@aws-sdk/client-s3`, credenciais pela cadeia padrão) |
 | `src/storage/local.ts` | Driver da pasta `./uploads` (**só desenvolvimento**) |
 | `src/storage/config.ts` | Escolhe o driver a partir de `STORAGE_DRIVER`, `S3_BUCKET` e `AWS_REGION` |
-| `src/storage/chaves.ts` | Formato do nome, da chave (`uploads/...`) e da URL |
+| `src/storage/chaves.ts` | Formato do nome, da chave (`uploads/...`) e da URL; `chaveDaUrlInterna` converte o valor gravado na chave |
+| `src/storage/limparImagem.ts` | Apaga a imagem antiga quando ninguém mais a usa (nunca lança) |
 | `src/middleware/uploadImagem.ts` | multer (`memoryStorage`, limites) e tradução dos erros |
 | `src/service/imagemService.ts` | Magic bytes, reencode, gravação e leitura |
 | `src/routes/imagemRoutes.ts` | Rotas e ordem dos middlewares |
@@ -137,7 +158,7 @@ veja `docker compose logs api`: em geral é o hop limit ou a permissão da role.
 
 ## Limitações conhecidas
 
-- Trocar ou apagar a foto de um animal/evento não apaga o arquivo antigo do bucket (fica
-  órfão). O driver já tem `remover`; a limpeza pode ser ligada aos services depois.
+- Uma imagem enviada pelo upload e nunca usada num registro (ex.: formulário abandonado)
+  continua no bucket.
 - As imagens passam pela API (não há CDN nem URL pré-assinada). Para o volume do abrigo é
   suficiente, e o cache de 1 ano no navegador evita downloads repetidos.

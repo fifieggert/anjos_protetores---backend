@@ -294,6 +294,10 @@ describe("GET /api/imagens/:arquivo", () => {
         expect(res.status).toBe(503);
     });
 
+    // 300 requisições: ~1 s sozinho, mas passa de 5 s (timeout padrão) com cobertura e todos
+    // os arquivos rodando em paralelo.
+    const TIMEOUT_300_LEITURAS = 20_000;
+
     it("limite folgado de 300 leituras por IP por minuto: dentro dele serve normalmente, acima dá 429", async () => {
         await memoria.salvar(`uploads/${ARQUIVO}.jpg`, Buffer.from("x"), "image/jpeg");
         const ler = () => api().get(`/api/imagens/${ARQUIVO}.jpg`);
@@ -310,7 +314,7 @@ describe("GET /api/imagens/:arquivo", () => {
         expect(bloqueado.body).toEqual({ error: "Muitas requisições de imagens. Tente novamente em instantes." });
         expect(bloqueado.headers["ratelimit-policy"]).toMatch(/^"300-in-1min"; q=300; w=60;/);
         expect(lerSpy).not.toHaveBeenCalled();
-    });
+    }, TIMEOUT_300_LEITURAS);
 
     it("estourar o limite de leitura não afeta o upload, e os envios não contam para a leitura", async () => {
         await memoria.salvar(`uploads/${ARQUIVO}.png`, Buffer.from("x"), "image/png");
@@ -325,7 +329,7 @@ describe("GET /api/imagens/:arquivo", () => {
             expect((await api().post("/api/imagens").set("Authorization", comoAdmin())).status).toBe(400);
         }
         expect((await api().get(`/api/imagens/${ARQUIVO}.png`)).status).toBe(200);
-    });
+    }, TIMEOUT_300_LEITURAS);
 });
 
 describe("detectarTipoImagem e reencodarImagem", () => {

@@ -1,12 +1,15 @@
 import { Prisma, StatusAnimal } from "@prisma/client";
 import { AppError } from "../utils/AppError";
+import prisma from "../config/prisma";
 import { animalSelect } from "../repository/animalRepository";
+import { removerImagemSeOrfa, removerImagemSubstituida } from "../storage/limparImagem";
 import { emTransacaoSerializavel } from "./transacao";
 
 // Status que só o fluxo de adoção define (ver adocaoService).
 const STATUS_DA_ADOCAO: StatusAnimal[] = [StatusAnimal.EM_ESPERA, StatusAnimal.ADOTADO];
 
 export interface AtualizacaoAnimal extends Prisma.AnimalUpdateInput {
+    fotoUrl?: string | null;
     status?: StatusAnimal;
     castrado?: boolean;
     dataCastracao?: Date | null;
@@ -24,11 +27,12 @@ export class animalService {
     //   andamento para um animal adotado.
     // - castração/vacina: a coerência é conferida com os valores já gravados. Desmarcar
     //   castrado ou vacinado limpa as datas e doses correspondentes.
-    atualizar(id: string, dados: AtualizacaoAnimal) {
-        return emTransacaoSerializavel(async (tx) => {
+    // - foto: trocada ou removida, a imagem antiga é apagada do armazenamento depois do commit.
+    async atualizar(id: string, dados: AtualizacaoAnimal) {
+        const { animal, fotoAntiga } = await emTransacaoSerializavel(async (tx) => {
             const atual = await tx.animal.findUnique({
                 where: { id },
-                select: { status: true, castrado: true, vacinado: true },
+                select: { status: true, castrado: true, vacinado: true, fotoUrl: true },
             });
             if (!atual) throw new AppError(404, "Animal não encontrado.");
 
@@ -66,7 +70,17 @@ export class animalService {
 
             if (Object.keys(campos).length > 0) throw new AppError(400, "Dados inválidos.", campos);
 
-            return tx.animal.update({ where: { id }, data: alteracao, select: animalSelect });
+            const atualizado = await tx.animal.update({ where: { id }, data: alteracao, select: animalSelect });
+            return { animal: atualizado, fotoAntiga: atual.fotoUrl };
         });
+
+        await removerImagemSubstituida(fotoAntiga, dados.fotoUrl);
+        return animal;
+    }
+
+    // A foto é apagada do armazenamento só depois que o registro saiu do banco.
+    async excluir(id: string) {
+        const { fotoUrl } = await prisma.animal.delete({ where: { id }, select: { fotoUrl: true } });
+        await removerImagemSeOrfa(fotoUrl);
     }
 }

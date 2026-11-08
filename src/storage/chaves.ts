@@ -1,5 +1,6 @@
 // Nomes, chaves e URLs das imagens enviadas. Um único lugar para o formato, usado pelo upload,
-// pela rota pública GET /api/imagens/:arquivo e pelos validators de animal e evento.
+// pela rota pública GET /api/imagens/:arquivo, pelos validators de animal e evento e pela
+// limpeza das imagens antigas (storage/limparImagem.ts).
 
 export const EXTENSOES_IMAGEM = ["jpg", "png", "webp"] as const;
 export type ExtensaoImagem = (typeof EXTENSOES_IMAGEM)[number];
@@ -29,6 +30,13 @@ export function ehUrlInternaImagem(valor: string): boolean {
 
 export const chaveDaImagem = (arquivo: string) => `${PREFIXO_CHAVE}${arquivo}`;
 export const urlDaImagem = (arquivo: string) => `${PREFIXO_URL_IMAGENS}${arquivo}`;
+
+// Valor gravado em fotoUrl/imagemUrl -> chave no armazenamento (uploads/<uuid>.<ext>).
+// null para URL externa, vazio ou qualquer valor fora do formato: não é uma imagem nossa.
+export function chaveDaUrlInterna(valor: string | null | undefined): string | null {
+    if (!valor || !ehUrlInternaImagem(valor)) return null;
+    return chaveDaImagem(valor.slice(PREFIXO_URL_IMAGENS.length));
+}
 
 // Use só com nomes já validados por ehArquivoImagem.
 export function extensaoDoArquivo(arquivo: string): ExtensaoImagem {

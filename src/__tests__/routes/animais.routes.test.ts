@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { prismaMock } from "../helpers/prisma";
 import { api } from "../helpers/app";
 import { ID_VOLUNTARIO, comoAdmin, comoVoluntario } from "../helpers/auth";
+import { definirArmazenamento } from "../../storage";
 
 const ANIMAL = "44444444-4444-4444-8444-444444444444";
+const FOTO = "/api/imagens/11111111-1111-4111-8111-111111111111.jpg";
 
 describe("/api/animais", () => {
     it("sem token dá 401 (a listagem completa é interna)", async () => {
@@ -64,8 +66,34 @@ describe("/api/animais", () => {
     });
 
     it("DELETE só para ADMIN", async () => {
+        prismaMock.animal.delete.mockResolvedValue({ fotoUrl: null } as never);
         expect((await api().delete(`/api/animais/${ANIMAL}`).set("Authorization", comoVoluntario())).status).toBe(403);
         expect((await api().delete(`/api/animais/${ANIMAL}`).set("Authorization", comoAdmin())).status).toBe(200);
         expect(prismaMock.animal.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it("falha ao apagar a foto antiga no armazenamento não muda a resposta do PUT nem do DELETE", async () => {
+        const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        definirArmazenamento({
+            salvar: async () => undefined,
+            ler: async () => null,
+            remover: async () => {
+                throw new Error("S3 fora do ar");
+            },
+        });
+        prismaMock.animal.count.mockResolvedValue(0);
+        prismaMock.evento.count.mockResolvedValue(0);
+        prismaMock.animal.findUnique.mockResolvedValue({ status: "DISPONIVEL", castrado: false, vacinado: false, fotoUrl: FOTO } as never);
+        prismaMock.animal.update.mockResolvedValue({ id: ANIMAL, fotoUrl: null } as never);
+        prismaMock.animal.delete.mockResolvedValue({ fotoUrl: FOTO } as never);
+
+        const put = await api().put(`/api/animais/${ANIMAL}`).set("Authorization", comoAdmin()).send({ fotoUrl: null });
+        const del = await api().delete(`/api/animais/${ANIMAL}`).set("Authorization", comoAdmin());
+
+        expect(put.status).toBe(200);
+        expect(put.body).toEqual({ id: ANIMAL, fotoUrl: null });
+        expect(del.status).toBe(200);
+        expect(del.body).toEqual({ message: "Animal deletado com sucesso" });
+        expect(log).toHaveBeenCalledTimes(2);
     });
 });

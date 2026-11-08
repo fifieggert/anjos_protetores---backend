@@ -5,6 +5,7 @@ export interface Armazenamento {
     salvar(chave: string, conteudo: Buffer, tipoMime: string): Promise<void>;
     // null quando o arquivo não existe
     ler(chave: string): Promise<Buffer | null>;
-    // não falha se o arquivo já não existir
+    // não falha se o arquivo já não existir. Os services não chamam direto: usam
+    // storage/limparImagem.ts, que confere se a imagem ainda está em uso e nunca lança.
     remover(chave: string): Promise<void>;
 }
