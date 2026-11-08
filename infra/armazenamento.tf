@@ -85,25 +85,41 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
   }
 }
 
-# Política do bucket: recusa qualquer requisição sem HTTPS (TLS), venha de quem vier.
+# Política do bucket: recusa requisições sem HTTPS (TLS) e com TLS abaixo de 1.2, venha de
+# quem vier. O aws:SecureTransport só garante que é HTTPS, não a versão; por isso a 2ª regra.
 resource "aws_s3_bucket_policy" "uploads" {
   bucket = aws_s3_bucket.uploads.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "ExigirTLS"
-      Effect    = "Deny"
-      Principal = "*"
-      Action    = "s3:*"
-      Resource = [
-        aws_s3_bucket.uploads.arn,
-        "${aws_s3_bucket.uploads.arn}/*",
-      ]
-      Condition = {
-        Bool = { "aws:SecureTransport" = "false" }
-      }
-    }]
+    Statement = [
+      {
+        Sid       = "ExigirTLS"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.uploads.arn,
+          "${aws_s3_bucket.uploads.arn}/*",
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+      {
+        Sid       = "ExigirTLS12"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.uploads.arn,
+          "${aws_s3_bucket.uploads.arn}/*",
+        ]
+        Condition = {
+          NumericLessThan = { "s3:TlsVersion" = 1.2 }
+        }
+      },
+    ]
   })
 
   # Aplica a política só depois do bloqueio de acesso público e do ownership (evita erro de
