@@ -131,8 +131,8 @@ resource "aws_s3_bucket_policy" "uploads" {
 }
 
 # ---- Permissão da EC2 (mesmo padrão do aws_iam_role_policy.ec2_app em compute.tf) ----
-# Privilégio mínimo: ler, gravar e apagar objetos SOMENTE em uploads/*, e listar SOMENTE esse
-# prefixo. Nada de s3:* nem de acesso a outros buckets. A API (container) usa estas
+# Privilégio mínimo: ler, gravar e apagar objetos SOMENTE em uploads/*, e listar o bucket
+# (que só tem uploads/). Nada de s3:* nem de acesso a outros buckets. A API (container) usa estes
 # credenciais pelo IMDSv2 (por isso o hop limit 2 em compute.tf).
 resource "aws_iam_role_policy" "ec2_uploads" {
   name = "${var.project}-ec2-uploads"
@@ -152,21 +152,20 @@ resource "aws_iam_role_policy" "ec2_uploads" {
         Resource = "${aws_s3_bucket.uploads.arn}/${local.uploads_prefixo}*"
       },
       {
-        # ListBucket é uma ação sobre o bucket (não sobre objetos): a restrição ao prefixo é
-        # feita pela condição s3:prefix.
+        # ListBucket é uma ação sobre o bucket (não sobre objetos). Sem ela, o S3 responde 403
+        # (em vez de 404) quando a API lê uma chave que não existe. O bucket só guarda uploads/,
+        # então listar o bucket não expõe nada além disso. Não restrinja por s3:prefix: essa
+        # condição só existe em requisições de listagem e faria a leitura de um objeto
+        # inexistente voltar 403.
         Sid      = "ListarUploads"
         Effect   = "Allow"
         Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.uploads.arn
-        Condition = {
-          StringLike = {
-            "s3:prefix" = [local.uploads_prefixo, "${local.uploads_prefixo}*"]
-          }
-        }
       },
     ]
   })
 }
+
 
 # ---- Configuração para a API ----
 # Nome do bucket no SSM Parameter Store, como String (não é segredo). O deploy.sh lê este
