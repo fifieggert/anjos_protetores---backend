@@ -192,9 +192,9 @@ para o deploy não quebrar antes do `terraform apply`:
  EOF
 ```
 
-O `docker-compose.prod.yml` não precisa mudar: o serviço `api` já carrega o `/opt/anjos/.env`
-(`env_file`). Ordem segura: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
-que usa o S3.
+(`env_file`). Ordem seguida: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
+que usa o S3. Essa ordem é só histórica: o `deploy.sh` já está aplicado, então um deploy novo
+já grava `AWS_REGION` e `S3_BUCKET` no `.env`.
 
 ## Primeiro usuário ADMIN em produção
 
