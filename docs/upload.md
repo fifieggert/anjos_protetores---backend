@@ -30,7 +30,7 @@ caracteres).
 | Upload desabilitado (ex.: produção sem `S3_BUCKET`) | 503 `O envio de imagens não está disponível no momento...` |
 | Nenhum arquivo no campo `arquivo` | 400 |
 | Mais de um arquivo, campo com outro nome, campos extras demais, multipart malformado | 400 |
-| Arquivo acima de **5 MB** (multer, em memória) | 413 `A imagem deve ter no máximo 5 MB.` |
+| Arquivo acima de **10 MB** (multer, em memória) | 413 `A imagem deve ter no máximo 10 MB.` |
 | Tipo diferente de **JPEG, PNG ou WebP**, conferido pelos *magic bytes* do conteúdo (nome e `Content-Type` enviados são ignorados). SVG, GIF, HEIC, PDF etc. são recusados | 415 `Formato não suportado...` |
 | Começa como imagem mas não decodifica (corrompido ou disfarçado) | 415 |
 | Mais de **25 megapixels** (largura × altura) declarados no cabeçalho (imagem-bomba), recusada antes de decodificar | 413 `A imagem tem dimensões grandes demais (máximo de 25 megapixels).` |
@@ -57,7 +57,7 @@ O que acontece com uma imagem aceita (`sharp`):
   `same-origin` no resto), para o frontend em outra origem (ex.: `localhost:5173` no
   desenvolvimento) conseguir exibir a imagem.
 
-Em produção, o Caddy também recusa corpos acima de 6 MB em `/api/imagens*` (`deploy/Caddyfile`).
+Em produção, o Caddy também recusa corpos acima de 11 MB em `/api/imagens*` (`deploy/Caddyfile`).
 
 ## Memória: limite de 25 MP e fila de processamento
 
@@ -87,8 +87,15 @@ Pico de memória medido (RSS a mais que o processo parado, Node 24 + sharp 0.34.
 | PNG entrelaçado (decodificado inteiro) | 88 MB | 176 MB | 101 MB | 347 MB | 126 MB |
 | PNG RGBA entrelaçado (pior caso) | 133 MB | 266 MB | 159 MB | 531 MB | 204–222 MB |
 
-O arquivo RGBA usado na medição tem 19 MB (acima dos 5 MB do upload); ele serve como teto,
+O arquivo RGBA usado na medição tem 19 MB (acima dos 10 MB do upload); ele serve como teto,
 porque a memória depende dos pixels, não do tamanho do arquivo.
+
+Impacto do limite de 10 MB: o multer guarda o arquivo inteiro na memória, então cada envio
+em andamento ocupa um buffer de até 10 MB (antes eram 5 MB), somado aos números da tabela.
+O buffer é lido antes de a imagem entrar na fila, então envios simultâneos que esperam a vez
+seguram cada um o seu (ex.: 4 simultâneos = até 40 MB a mais). A fila única continua
+processando uma imagem por vez, então o pico do decode/reencode não muda: ele depende dos
+pixels (limitados a 25 MP), não do tamanho do arquivo.
 
 Sem a fila, o pico cresce com o número de envios simultâneos; com ela, fica perto do de uma
 imagem só. JPEG e WebP são decodificados já reduzidos e em faixas, então gastam pouco; o PNG

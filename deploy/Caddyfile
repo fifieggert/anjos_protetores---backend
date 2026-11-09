@@ -39,12 +39,12 @@ abrigoanjosprotetores.com.br {
 		reverse_proxy api:4000
 	}
 
-	# Upload de imagens: a API aceita até 5 MB por arquivo; o Caddy corta antes, em 6 MB
+	# Upload de imagens: a API aceita até 10 MB por arquivo; o Caddy corta antes, em 11 MB
 	# (arquivo + cabeçalhos do multipart), sem ocupar a API com corpos gigantes.
 	# Mais específico que /api/*, então o Caddy confere este bloco primeiro.
 	handle /api/imagens* {
 		request_body {
-			max_size 6MB
+			max_size 11MB
 		}
 		reverse_proxy api:4000
 	}

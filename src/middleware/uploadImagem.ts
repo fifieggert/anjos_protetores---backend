@@ -4,7 +4,8 @@ import { AppError } from "../utils/AppError";
 import { exigirArmazenamento } from "../storage";
 
 export const CAMPO_ARQUIVO = "arquivo";
-export const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5 MB
+// Limite único de tamanho do arquivo enviado (o Caddy corta o corpo em 11 MB, um pouco acima).
+export const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB
 
 // memoryStorage: o arquivo fica só na memória (Buffer) até ir para o armazenamento.
 // Nada é gravado em disco no servidor.

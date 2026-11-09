@@ -9,7 +9,7 @@ const router = Router();
 const controller = new imagemController();
 
 // Upload: equipe do abrigo (quem cadastra animais e eventos). A ordem importa: o corpo
-// (até 5 MB) só é lido depois do token, do perfil, do limite e do armazenamento.
+// (até 10 MB) só é lido depois do token, do perfil, do limite e do armazenamento.
 router.post(
     "/",
     authMiddleware,

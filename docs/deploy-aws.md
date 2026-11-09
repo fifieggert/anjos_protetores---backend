@@ -171,9 +171,9 @@ seção *Upload de imagens (S3)*).
 - **Configuração**: o Terraform grava o nome do bucket em `/anjos/s3_bucket` (String, não
   secreto). A API precisa de `S3_BUCKET` e `AWS_REGION`.
 
-### Mudança proposta no `deploy.sh` (ainda não aplicada)
+### Mudança no `deploy.sh` (já aplicada)
 
-A menor mudança é o `deploy.sh` ler o parâmetro junto com os outros e gravar as duas
+O `deploy.sh` lê o parâmetro junto com os outros e grava as duas
 variáveis no `.env`. A região já existe no script (`REGIAO`). O parâmetro é lido como opcional
 para o deploy não quebrar antes do `terraform apply`:
 
