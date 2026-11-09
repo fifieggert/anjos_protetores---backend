@@ -7,6 +7,7 @@ import { ArmazenamentoMemoria } from "../helpers/armazenamento";
 import { esperarAppError } from "../helpers/erros";
 import { definirArmazenamento } from "../../storage";
 import { LIMITE_PIXELS, detectarTipoImagem, reencodarImagem } from "../../service/imagemService";
+import { TAMANHO_MAXIMO } from "../../middleware/uploadImagem";
 
 const URL_IMAGEM = /^\/api\/imagens\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp)$/;
 const TIPO_INVALIDO = "Formato não suportado. Envie uma imagem JPEG, PNG ou WebP.";
@@ -121,11 +122,11 @@ describe("POST /api/imagens", () => {
         expect(memoria.arquivos.size).toBe(0);
     });
 
-    it("arquivo acima de 5 MB dá 413", async () => {
-        const grande = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(5 * 1024 * 1024)]);
+    it("arquivo acima de 10 MB dá 413", async () => {
+        const grande = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(TAMANHO_MAXIMO)]);
         const res = await enviar(grande);
         expect(res.status).toBe(413);
-        expect(res.body).toEqual({ error: "A imagem deve ter no máximo 5 MB." });
+        expect(res.body).toEqual({ error: "A imagem deve ter no máximo 10 MB." });
         expect(memoria.arquivos.size).toBe(0);
     });
 

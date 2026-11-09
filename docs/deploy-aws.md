@@ -171,9 +171,9 @@ seção *Upload de imagens (S3)*).
 - **Configuração**: o Terraform grava o nome do bucket em `/anjos/s3_bucket` (String, não
   secreto). A API precisa de `S3_BUCKET` e `AWS_REGION`.
 
-### Mudança proposta no `deploy.sh` (ainda não aplicada)
+### Mudança no `deploy.sh` (já aplicada)
 
-A menor mudança é o `deploy.sh` ler o parâmetro junto com os outros e gravar as duas
+O `deploy.sh` lê o parâmetro junto com os outros e grava as duas
 variáveis no `.env`. A região já existe no script (`REGIAO`). O parâmetro é lido como opcional
 para o deploy não quebrar antes do `terraform apply`:
 
@@ -192,9 +192,9 @@ para o deploy não quebrar antes do `terraform apply`:
  EOF
 ```
 
-O `docker-compose.prod.yml` não precisa mudar: o serviço `api` já carrega o `/opt/anjos/.env`
-(`env_file`). Ordem segura: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
-que usa o S3.
+(`env_file`). Ordem seguida: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
+que usa o S3. Essa ordem é só histórica: o `deploy.sh` já está aplicado, então um deploy novo
+já grava `AWS_REGION` e `S3_BUCKET` no `.env`.
 
 ## Primeiro usuário ADMIN em produção
 
