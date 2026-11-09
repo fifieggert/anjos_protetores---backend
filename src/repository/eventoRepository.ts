@@ -56,10 +56,5 @@ export class eventoRepository {
         });
         return eventos.map(comDia);
     }
-
-    delete(id: string) {
-        return prisma.evento.delete({
-            where: { id },
-        });
-    }
+    // exclusão: eventoService.excluir (também apaga a imagem do armazenamento)
 }

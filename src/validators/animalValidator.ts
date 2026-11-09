@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Especie, Porte, Sexo, StatusAnimal } from "@prisma/client";
-import { MAX_TEXTO, dataOpcionalNula, paraAtualizacao, textoObrigatorio, textoOpcional } from "./comum";
+import { MAX_TEXTO, dataOpcionalNula, paraAtualizacao, textoObrigatorio, textoOpcional, urlImagem } from "./comum";
 
 // usuarioCadastro não é aceito do cliente: vem do token (req.usuario).
 const animalSchema = z.strictObject({
@@ -9,7 +9,8 @@ const animalSchema = z.strictObject({
     raca: textoOpcional(),
     idade: z.int().min(0).max(40).nullable().optional(),
     porte: z.enum(Porte),
-    fotoUrl: z.url({ protocol: /^https?$/ }).max(MAX_TEXTO).nullable().optional(),
+    // URL http/https ou caminho do upload (/api/imagens/<arquivo>)
+    fotoUrl: urlImagem(MAX_TEXTO),
     // também é a observação impressa no termo de adoção
     descricao: textoOpcional(),
     sexo: z.enum(Sexo).nullable().optional(),

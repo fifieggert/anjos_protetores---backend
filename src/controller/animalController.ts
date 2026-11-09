@@ -36,7 +36,8 @@ export class animalController {
     }
 
     async delete(req: Request, res: Response) {
-        await repository.delete(req.params.id as string);
+        // a foto é apagada do armazenamento no service, depois do delete no banco
+        await service.excluir(req.params.id as string);
         return res.status(200).send({"message": "Animal deletado com sucesso"});
     }
 }

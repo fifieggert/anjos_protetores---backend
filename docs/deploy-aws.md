@@ -26,6 +26,7 @@ flowchart LR
     IAM -->|SSM Run Command| EC2
     EC2 -->|pull| ECR
     EC2 -->|lê segredos| SSM[(SSM Parameter Store<br/>/anjos/*)]
+    A -->|imagens, role via IMDSv2| S3[(S3 privado<br/>anjos-uploads-conta/uploads/)]
 ```
 
 Em texto:
@@ -42,6 +43,7 @@ GitHub Actions ──OIDC──► AWS: push da imagem no ECR + comando de deplo
 | **web** | Frontend (imagem `anjos-frontend` do ECR), porta interna 8080 |
 | **api** | Backend (imagem `anjos-backend` do ECR), porta interna 4000, usuário não-root `node` |
 | **RDS** | Banco MySQL gerenciado, sem IP público, só aceita conexões com TLS |
+| **S3** | Bucket privado com as fotos de animais e eventos; a API grava só em `uploads/` |
 
 Frontend e API ficam no **mesmo domínio** (`/` e `/api`), então o navegador não faz
 requisições entre origens diferentes (não depende de CORS). O frontend deve ser compilado
@@ -155,6 +157,45 @@ mysql://anjos:<senha>@<endpoint-rds>:3306/anjos_protetores?ssl=true&sslaccept=st
 - O arquivo `/certs/rds-ca.pem` é o pacote de certificados do RDS, baixado pelo `user_data`
   da EC2 em `/opt/anjos/certs` e montado no container em `/certs` (somente leitura).
 
+## Upload de imagens (S3)
+
+As fotos de animais e de eventos ficam no bucket S3 **privado** `anjos-uploads-<id-da-conta>`,
+criado em `infra/armazenamento.tf` (detalhes, validação e limpeza em `infra/README.md`,
+seção *Upload de imagens (S3)*).
+
+- **Acesso**: só a role da EC2, e só no prefixo `uploads/` (`PutObject`, `GetObject`,
+  `DeleteObject` e `ListBucket` com prefixo `uploads/`). Block Public Access ligado, sem ACLs,
+  criptografia SSE-S3, HTTPS obrigatório e sem versionamento.
+- **Credenciais**: o container da API usa o SDK da AWS com a role da instância, pelo IMDSv2
+  (hop limit 2). **Nenhuma chave de acesso vai para o `.env`.**
+- **Configuração**: o Terraform grava o nome do bucket em `/anjos/s3_bucket` (String, não
+  secreto). A API precisa de `S3_BUCKET` e `AWS_REGION`.
+
+### Mudança no `deploy.sh` (já aplicada)
+
+O `deploy.sh` lê o parâmetro junto com os outros e grava as duas
+variáveis no `.env`. A região já existe no script (`REGIAO`). O parâmetro é lido como opcional
+para o deploy não quebrar antes do `terraform apply`:
+
+```diff
+ ABRIGO_TELEFONE="$(ler_opcional /anjos/abrigo_telefone)"
++S3_BUCKET="$(ler_opcional /anjos/s3_bucket)"
+@@
+-for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE; do
++for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE S3_BUCKET; do
+@@
+ ABRIGO_TELEFONE='$ABRIGO_TELEFONE'
++
++# Upload de imagens (S3). As credenciais vêm da role da EC2 (IMDSv2), não daqui.
++AWS_REGION='$REGIAO'
++S3_BUCKET='$S3_BUCKET'
+ EOF
+```
+
+(`env_file`). Ordem seguida: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
+que usa o S3. Essa ordem é só histórica: o `deploy.sh` já está aplicado, então um deploy novo
+já grava `AWS_REGION` e `S3_BUCKET` no `.env`.
+
 ## Primeiro usuário ADMIN em produção
 
 Feito uma vez, à mão, **sem a senha passar pelo repositório, pelo GitHub ou pelo histórico
@@ -250,6 +291,7 @@ point in time*), que cria uma instância nova.
 | Disco da EC2 (20 GB gp3) | ~3 |
 | Elastic IP (IPv4 público) | ~3,6 |
 | ECR (até 10 imagens por repositório, ~1 GB) | ~0,1 |
+| S3 uploads (até ~5 GB de fotos + requisições) | ~0,2 |
 | SSM (Parameter Store padrão, Run Command, Session Manager), OIDC, IAM | grátis |
 | Certificado HTTPS (Let's Encrypt via Caddy) | grátis |
 | GitHub Actions | grátis em repositório público; em privado, dentro da cota gratuita mensal |
@@ -267,4 +309,6 @@ O detalhamento e as premissas estão em `infra/README.md`. Fora do TCC, desligue
 | Status `Undeliverable`/`TimedOut` | Agente do SSM fora do ar na EC2; veja *Fleet Manager* no console |
 | Migrations falham | `DATABASE_URL` errada, certificado ausente em `/opt/anjos/certs` ou migration inválida. A versão antiga continua no ar |
 | API não fica pronta | `dc logs api`. "Não foi possível ler o certificado" = falta `/opt/anjos/certs/rds-ca.pem` |
+| Upload falha: `Could not load credentials` ou timeout no IMDS | `HttpPutResponseHopLimit` da EC2 diferente de 2 (ver `infra/README.md`) |
+| Upload falha: `AccessDenied` | Chave do objeto fora de `uploads/`, ou `S3_BUCKET` vazio no `.env` (falta `/anjos/s3_bucket` ou o `terraform apply`) |
 | Site sem HTTPS | DNS ainda não aponta para o Elastic IP; veja `dc logs caddy` (erros do Let's Encrypt) |

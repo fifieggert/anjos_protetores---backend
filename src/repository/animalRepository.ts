@@ -72,10 +72,5 @@ export class animalRepository {
             orderBy: { criadoEm: "desc" },
         });
     }
-
-    delete(id: string) {
-        return prisma.animal.delete({
-            where: { id },
-        });
-    }
+    // exclusão: animalService.excluir (também apaga a foto do armazenamento)
 }

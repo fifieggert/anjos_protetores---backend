@@ -34,6 +34,23 @@ describe("criarEventoSchema", () => {
         expect(errosDe(criarEventoSchema, { ...valido, horarioFim })).toEqual({ horarioFim: MENSAGEM_HORARIO_FIM });
     });
 
+    it("imagemUrl aceita http/https e o caminho do upload; recusa o resto", () => {
+        const interna = "/api/imagens/0f8b2c3d-1e2f-4a5b-8c6d-7e8f9a0b1c2d.webp";
+        expect(criarEventoSchema.parse({ ...valido, imagemUrl: interna }).imagemUrl).toBe(interna);
+        expect(criarEventoSchema.safeParse({ ...valido, imagemUrl: "http://exemplo.com/a.png" }).success).toBe(true);
+        for (const imagemUrl of ["ftp://exemplo.com/a.png", "/api/imagens/a.svg", "/api/imagens/..%2Fx.jpg"]) {
+            expect(errosDe(criarEventoSchema, { ...valido, imagemUrl })).toHaveProperty("imagemUrl");
+        }
+    });
+
+    it("imagemUrl mantém o limite de 500 caracteres", () => {
+        const longa = `https://exemplo.com/${"a".repeat(481)}`;
+        expect(errosDe(criarEventoSchema, { ...valido, imagemUrl: longa })).toEqual({
+            imagemUrl: "Deve ter no máximo 500 caracteres.",
+        });
+        expect(criarEventoSchema.safeParse({ ...valido, imagemUrl: longa.slice(0, 500) }).success).toBe(true);
+    });
+
     it("aceita horário de fim depois do início ou nulo", () => {
         expect(criarEventoSchema.safeParse({ ...valido, horarioFim: "09:01" }).success).toBe(true);
         expect(criarEventoSchema.safeParse({ ...valido, horarioFim: null }).success).toBe(true);

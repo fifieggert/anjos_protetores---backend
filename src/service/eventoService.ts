@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { comDia, eventoSelect } from "../repository/eventoRepository";
 import { diaParaBanco } from "../utils/datas";
+import { removerImagemSeOrfa, removerImagemSubstituida } from "../storage/limparImagem";
 import { MENSAGEM_HORARIO_FIM, fimDepoisDoInicio } from "../validators/eventoValidator";
 
 // Corpo já validado (eventoValidator). A data chega como AAAA-MM-DD.
@@ -14,6 +15,7 @@ export interface AtualizacaoEvento extends Omit<Prisma.EventoUpdateInput, "data"
     data?: string;
     horarioInicio?: string;
     horarioFim?: string | null;
+    imagemUrl?: string | null;
 }
 
 export class eventoService {
@@ -26,10 +28,11 @@ export class eventoService {
     }
 
     // Quando só um dos horários vem no corpo, o término é conferido com o que já está gravado.
+    // Imagem trocada ou removida: a antiga é apagada do armazenamento depois do update.
     async atualizar(id: string, dados: AtualizacaoEvento) {
         const atual = await prisma.evento.findUnique({
             where: { id },
-            select: { horarioInicio: true, horarioFim: true },
+            select: { horarioInicio: true, horarioFim: true, imagemUrl: true },
         });
         if (!atual) throw new AppError(404, "Evento não encontrado.");
 
@@ -45,6 +48,13 @@ export class eventoService {
             data: { ...resto, ...(data !== undefined ? { data: diaParaBanco(data) } : {}) },
             select: eventoSelect,
         });
+        await removerImagemSubstituida(atual.imagemUrl, dados.imagemUrl);
         return comDia(evento);
+    }
+
+    // A imagem é apagada do armazenamento só depois que o registro saiu do banco.
+    async excluir(id: string) {
+        const { imagemUrl } = await prisma.evento.delete({ where: { id }, select: { imagemUrl: true } });
+        await removerImagemSeOrfa(imagemUrl);
     }
 }
