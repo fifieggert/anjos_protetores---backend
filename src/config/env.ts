@@ -81,3 +81,7 @@ function configArmazenamento(): ConfigArmazenamento {
 }
 
 export const CONFIG_ARMAZENAMENTO = configArmazenamento();
+
+// Monitoramento (Sentry), opcional: SENTRY_DSN e SENTRY_TRACES_SAMPLE_RATE (0 a 1, padrão
+// 0.2). São lidas em src/instrument.ts, e não aqui, porque o SDK precisa iniciar antes dos
+// demais módulos (inclusive este). Sem SENTRY_DSN, o Sentry fica desligado.

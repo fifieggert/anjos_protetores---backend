@@ -22,6 +22,9 @@ export default defineConfig({
             CORS_ORIGIN: "http://localhost:5173",
             ABRIGO_CIDADE: "Blumenau/SC",
             ABRIGO_TELEFONE: "(47) 3333-4444",
+            // Sentry sempre desligado nos testes (nenhuma chamada de rede), mesmo que a
+            // máquina tenha SENTRY_DSN no ambiente.
+            SENTRY_DSN: "",
         },
         coverage: {
             provider: "v8",

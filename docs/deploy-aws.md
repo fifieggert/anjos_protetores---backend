@@ -27,6 +27,7 @@ flowchart LR
     EC2 -->|pull| ECR
     EC2 -->|lê segredos| SSM[(SSM Parameter Store<br/>/anjos/*)]
     A -->|imagens, role via IMDSv2| S3[(S3 privado<br/>anjos-uploads-conta/uploads/)]
+    EC2 -->|logs dos containers, driver awslogs| CW[(CloudWatch Logs<br/>/anjos/containers)]
 ```
 
 Em texto:
@@ -44,6 +45,7 @@ GitHub Actions ──OIDC──► AWS: push da imagem no ECR + comando de deplo
 | **api** | Backend (imagem `anjos-backend` do ECR), porta interna 4000, usuário não-root `node` |
 | **RDS** | Banco MySQL gerenciado, sem IP público, só aceita conexões com TLS |
 | **S3** | Bucket privado com as fotos de animais e eventos; a API grava só em `uploads/` |
+| **CloudWatch Logs** | Logs dos três containers no grupo `/anjos/containers` (um log stream por serviço), guardados por 14 dias |
 
 Frontend e API ficam no **mesmo domínio** (`/` e `/api`), então o navegador não faz
 requisições entre origens diferentes (não depende de CORS). O frontend deve ser compilado
@@ -95,7 +97,9 @@ sequenceDiagram
    2. lê `/anjos/database_url`, `/anjos/jwt_secret` e `/anjos/db_password` do SSM e gera
       `/opt/anjos/.env` com permissão `600` (inclui `NODE_ENV=production`,
       `CORS_ORIGIN=https://abrigoanjosprotetores.com.br`, `TRUST_PROXY=1` e, se existirem
-      os parâmetros `/anjos/abrigo_cidade` e `/anjos/abrigo_telefone`, os dados do termo em PDF);
+      os parâmetros `/anjos/abrigo_cidade` e `/anjos/abrigo_telefone`, os dados do termo em PDF,
+      `/anjos/s3_bucket`, o bucket das imagens, e `/anjos/sentry_dsn`, o DSN do Sentry;
+      sem ele, a API sobe com o monitoramento desligado);
    3. roda `prisma migrate deploy` num container temporário **com a imagem nova, antes de
       trocar a API**. Se falhar, para aqui e a versão antiga continua no ar;
    4. `docker compose up -d` (só recria o que mudou) e recarrega o Caddy;
@@ -196,6 +200,27 @@ para o deploy não quebrar antes do `terraform apply`:
 que usa o S3. Essa ordem é só histórica: o `deploy.sh` já está aplicado, então um deploy novo
 já grava `AWS_REGION` e `S3_BUCKET` no `.env`.
 
+## Monitoramento (Sentry)
+
+O DSN do Sentry fica no SSM em `/anjos/sentry_dsn` (**SecureString**). O parâmetro é
+opcional: o `deploy.sh` o lê com `ler_opcional`, confere que não tem aspas simples nem quebra
+de linha e grava `SENTRY_DSN` no `/opt/anjos/.env`. Sem ele, a API sobe normalmente com o
+Sentry desligado. A role da EC2 já pode ler `/anjos/*` (`infra/compute.tf`), então não
+precisa de permissão nova. O parâmetro não é criado pelo Terraform: crie uma vez, à mão,
+**sem o valor passar pelo repositório nem pelo histórico do terminal**:
+
+```bash
+read -rs SENTRY_DSN   # cole o DSN (não aparece na tela) e tecle Enter
+aws ssm put-parameter --region sa-east-1 --name /anjos/sentry_dsn --type SecureString \
+  --value "$SENTRY_DSN" --overwrite
+unset SENTRY_DSN
+```
+
+O valor passa a valer no próximo deploy. Para conferir, procure a mensagem de nível `info`
+**"API iniciada"** no painel do Sentry. A fração de traces de desempenho fica no padrão `0.2`
+(o `deploy.sh` não grava `SENTRY_TRACES_SAMPLE_RATE`); detalhes em
+[deploy-backend.md](deploy-backend.md#monitoramento-sentry).
+
 ## Primeiro usuário ADMIN em produção
 
 Feito uma vez, à mão, **sem a senha passar pelo repositório, pelo GitHub ou pelo histórico
@@ -249,10 +274,75 @@ dc logs --tail 200 web
 grep IMAGE /opt/anjos/.env  # versões em execução (sem mostrar segredos)
 ```
 
-- Cada container guarda no máximo 30 MB de log (3 arquivos de 10 MB), para não encher o disco.
+- Os logs vão para o CloudWatch Logs (ver *Logs no CloudWatch* abaixo), mas o `dc logs`
+  continua funcionando: o Docker mantém uma cópia local de cada container (no máximo 30 MB,
+  3 arquivos de 10 MB, para não encher o disco). Essa cópia some quando o container é
+  recriado (todo deploy que troca a imagem); o histórico completo fica no CloudWatch.
 - O histórico de deploys fica em *Actions > Deploy* no GitHub e em
   *Systems Manager > Run Command > Command history* no console da AWS.
 - Não use `cat /opt/anjos/.env`: ele contém os segredos.
+
+## Logs no CloudWatch
+
+A saída (stdout/stderr) dos containers `caddy`, `web` e `api` vai para o **CloudWatch Logs**
+pelo driver `awslogs` do Docker (`x-logs-opcoes` em `deploy/docker-compose.prod.yml`):
+
+| Item | Valor |
+|---|---|
+| Log group | `/anjos/containers` (criado em `infra/logs.tf`) |
+| Log streams | `caddy`, `web` e `api` (o nome do serviço) |
+| Região | `sa-east-1` |
+| Retenção | 14 dias; depois a AWS apaga sozinha |
+| Quem envia | O daemon do Docker, no host, com a role da EC2 (`aws_iam_role_policy.ec2_logs`: só `logs:CreateLogStream` e `logs:PutLogEvents` nesse grupo). Nenhuma chave de acesso |
+
+### Ordem obrigatória na primeira vez
+
+O compose usa `awslogs-create-group: "false"`: o grupo e a permissão vêm do Terraform.
+Se o compose novo chegar à EC2 antes deles, o Docker não consegue criar o log stream e
+**os containers não sobem** (o `deploy.sh` falha e a versão anterior pode ficar fora do ar).
+
+1. `terraform apply` com `infra/logs.tf` (ver *Logs no CloudWatch* em `infra/README.md`);
+2. só depois, o deploy com o `deploy/docker-compose.prod.yml` novo (push na `main` ou
+   `deploy.sh` à mão).
+
+Nesse deploy, o `docker compose up -d` recria os três containers mesmo sem imagem nova (a
+configuração de log mudou), com alguns segundos de indisponibilidade. A cópia local dos
+logs antigos (json-file) é descartada junto.
+
+### Ver os logs no console
+
+1. Console da AWS, região **São Paulo (sa-east-1)** > **CloudWatch** > **Logs** > **Log groups**;
+2. abra **`/anjos/containers`** e clique no log stream do serviço (`api`, `caddy` ou `web`);
+3. para buscar em todos de uma vez, use **Logs Insights** com o grupo `/anjos/containers`:
+
+```
+fields @timestamp, @logStream, @message
+| filter @message like /erro/
+| sort @timestamp desc
+| limit 100
+```
+
+Pela AWS CLI, na sua máquina: `aws logs tail /anjos/containers --follow --region sa-east-1`
+(ou `--log-stream-names api` para só a API).
+
+### Cópia local (`docker compose logs`)
+
+Drivers como o `awslogs` só enviam: não sabem ler de volta. Desde o Docker 20.10, o daemon
+mantém uma cópia local de cada container (*dual logging*, ligado por padrão), e é dela que o
+`dc logs` lê, inclusive o `dc logs --tail 80 api` que o `deploy.sh` mostra quando a API não
+fica pronta. As opções `cache-max-size: "10m"` e `cache-max-file: "3"` limitam essa cópia a
+30 MB por container. Para conferir na EC2: `docker version` (Engine 20.10 ou mais nova) e
+`dc logs --tail 20 api`.
+
+### Custo
+
+O CloudWatch Logs cobra pela ingestão (dados enviados) e pelo armazenamento. O nível
+gratuito permanente da AWS inclui 5 GB por mês de ingestão e armazenamento. Uma API deste
+porte gera bem menos que isso (o log do `morgan` e o do Caddy, poucos MB por dia), então o
+custo esperado é **~US$ 0**. Acima da cota, a ingestão custa algo como US$ 0,50–0,90 por GB
+(varia por região; sa-east-1 é mais cara que us-east-1) e o armazenamento centavos por GB/mês.
+A retenção de 14 dias impede que o armazenamento cresça para sempre. Confira os preços
+atuais em [aws.amazon.com/cloudwatch/pricing](https://aws.amazon.com/cloudwatch/pricing/).
 
 ## Rollback (voltar para a versão anterior)
 
@@ -292,6 +382,7 @@ point in time*), que cria uma instância nova.
 | Elastic IP (IPv4 público) | ~3,6 |
 | ECR (até 10 imagens por repositório, ~1 GB) | ~0,1 |
 | S3 uploads (até ~5 GB de fotos + requisições) | ~0,2 |
+| CloudWatch Logs (dentro dos 5 GB/mês gratuitos, retenção de 14 dias) | ~0 |
 | SSM (Parameter Store padrão, Run Command, Session Manager), OIDC, IAM | grátis |
 | Certificado HTTPS (Let's Encrypt via Caddy) | grátis |
 | GitHub Actions | grátis em repositório público; em privado, dentro da cota gratuita mensal |
@@ -311,4 +402,6 @@ O detalhamento e as premissas estão em `infra/README.md`. Fora do TCC, desligue
 | API não fica pronta | `dc logs api`. "Não foi possível ler o certificado" = falta `/opt/anjos/certs/rds-ca.pem` |
 | Upload falha: `Could not load credentials` ou timeout no IMDS | `HttpPutResponseHopLimit` da EC2 diferente de 2 (ver `infra/README.md`) |
 | Upload falha: `AccessDenied` | Chave do objeto fora de `uploads/`, ou `S3_BUCKET` vazio no `.env` (falta `/anjos/s3_bucket` ou o `terraform apply`) |
+| Containers não sobem: `failed to create Cloudwatch log stream` / `ResourceNotFoundException` | Falta o log group `/anjos/containers`: rode o `terraform apply` de `infra/logs.tf` e repita o deploy |
+| Containers não sobem: `AccessDeniedException` no `CreateLogStream`/`PutLogEvents` | Falta a política `anjos-ec2-logs` na role da EC2 (mesmo `terraform apply`) |
 | Site sem HTTPS | DNS ainda não aponta para o Elastic IP; veja `dc logs caddy` (erros do Let's Encrypt) |

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -25,6 +26,10 @@ app.use(express.json());
 app.use("/api", routes);
 
 app.use(rotaNaoEncontrada);
+// Sentry depois das rotas e antes do tratarErros. Só reporta erros que viram 500
+// (AppError e 4xx são descartados no beforeSend, ver instrument.ts). Sem SENTRY_DSN,
+// o SDK não está inicializado e o handler não faz nada.
+Sentry.setupExpressErrorHandler(app);
 app.use(tratarErros);
 
 export default app;

@@ -60,6 +60,18 @@ function registrarErro(err: unknown) {
     }
 }
 
+// Erros do Prisma e do express.json que têm resposta própria (4xx). null = erro inesperado (500).
+function erroConhecido(err: unknown): [number, string] | null {
+    return (err instanceof Prisma.PrismaClientKnownRequestError ? erroDoPrisma(err) : null) ?? erroDoCorpo(err);
+}
+
+// Monitoramento (Sentry): só reporta o que o tratarErros responde com 500 inesperado.
+// AppError é sempre esperado (mesmo um 503, como o upload desabilitado) e os erros
+// conhecidos viram 4xx, então nenhum deles é reportado.
+export function deveReportarErro(err: unknown): boolean {
+    return !(err instanceof AppError) && erroConhecido(err) === null;
+}
+
 export function rotaNaoEncontrada(_req: Request, res: Response) {
     res.status(404).json({ error: "Rota não encontrada." });
 }
@@ -70,8 +82,7 @@ export function tratarErros(err: unknown, _req: Request, res: Response, _next: N
         return res.status(err.status).json(err.campos ? { error: err.message, campos: err.campos } : { error: err.message });
     }
 
-    const conhecido =
-        (err instanceof Prisma.PrismaClientKnownRequestError ? erroDoPrisma(err) : null) ?? erroDoCorpo(err);
+    const conhecido = erroConhecido(err);
 
     if (conhecido) {
         const [status, mensagem] = conhecido;
