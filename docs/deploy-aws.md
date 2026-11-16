@@ -95,7 +95,9 @@ sequenceDiagram
    2. lê `/anjos/database_url`, `/anjos/jwt_secret` e `/anjos/db_password` do SSM e gera
       `/opt/anjos/.env` com permissão `600` (inclui `NODE_ENV=production`,
       `CORS_ORIGIN=https://abrigoanjosprotetores.com.br`, `TRUST_PROXY=1` e, se existirem
-      os parâmetros `/anjos/abrigo_cidade` e `/anjos/abrigo_telefone`, os dados do termo em PDF);
+      os parâmetros `/anjos/abrigo_cidade` e `/anjos/abrigo_telefone`, os dados do termo em PDF,
+      `/anjos/s3_bucket`, o bucket das imagens, e `/anjos/sentry_dsn`, o DSN do Sentry;
+      sem ele, a API sobe com o monitoramento desligado);
    3. roda `prisma migrate deploy` num container temporário **com a imagem nova, antes de
       trocar a API**. Se falhar, para aqui e a versão antiga continua no ar;
    4. `docker compose up -d` (só recria o que mudou) e recarrega o Caddy;
@@ -195,6 +197,27 @@ para o deploy não quebrar antes do `terraform apply`:
 (`env_file`). Ordem seguida: `terraform apply` → merge do `deploy.sh` → deploy da versão da API
 que usa o S3. Essa ordem é só histórica: o `deploy.sh` já está aplicado, então um deploy novo
 já grava `AWS_REGION` e `S3_BUCKET` no `.env`.
+
+## Monitoramento (Sentry)
+
+O DSN do Sentry fica no SSM em `/anjos/sentry_dsn` (**SecureString**). O parâmetro é
+opcional: o `deploy.sh` o lê com `ler_opcional`, confere que não tem aspas simples nem quebra
+de linha e grava `SENTRY_DSN` no `/opt/anjos/.env`. Sem ele, a API sobe normalmente com o
+Sentry desligado. A role da EC2 já pode ler `/anjos/*` (`infra/compute.tf`), então não
+precisa de permissão nova. O parâmetro não é criado pelo Terraform: crie uma vez, à mão,
+**sem o valor passar pelo repositório nem pelo histórico do terminal**:
+
+```bash
+read -rs SENTRY_DSN   # cole o DSN (não aparece na tela) e tecle Enter
+aws ssm put-parameter --region sa-east-1 --name /anjos/sentry_dsn --type SecureString \
+  --value "$SENTRY_DSN" --overwrite
+unset SENTRY_DSN
+```
+
+O valor passa a valer no próximo deploy. Para conferir, procure a mensagem de nível `info`
+**"API iniciada"** no painel do Sentry. A fração de traces de desempenho fica no padrão `0.2`
+(o `deploy.sh` não grava `SENTRY_TRACES_SAMPLE_RATE`); detalhes em
+[deploy-backend.md](deploy-backend.md#monitoramento-sentry).
 
 ## Primeiro usuário ADMIN em produção
 

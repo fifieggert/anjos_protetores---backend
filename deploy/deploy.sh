@@ -7,7 +7,7 @@
 #
 # Passos:
 #   1. login no ECR e download (pull) das imagens novas
-#   2. lê os segredos (e o bucket de imagens) do SSM Parameter Store e gera
+#   2. lê os segredos (e o bucket de imagens e o DSN do Sentry) do SSM Parameter Store e gera
 #      /opt/anjos/.env (permissão 600)
 #   3. aplica as migrations do banco ("prisma migrate deploy") com a imagem NOVA,
 #      antes de trocar a API que está no ar
@@ -85,13 +85,15 @@ ABRIGO_CIDADE="$(ler_opcional /anjos/abrigo_cidade)"
 ABRIGO_TELEFONE="$(ler_opcional /anjos/abrigo_telefone)"
 # Bucket do upload de imagens (não é segredo). Sem ele, a API sobe e o upload responde 503.
 S3_BUCKET="$(ler_opcional /anjos/s3_bucket)"
+# DSN do Sentry (monitoramento de erros). Sem ele, a API sobe com o Sentry desligado.
+SENTRY_DSN="$(ler_opcional /anjos/sentry_dsn)"
 
 [[ -n $DATABASE_URL && -n $JWT_SECRET && -n $DB_PASSWORD ]] || falha "parâmetro obrigatório vazio no SSM."
 unset DB_PASSWORD
 
 # Os valores vão entre aspas simples no .env (o docker compose não interpreta nada dentro
 # delas). Por isso não podem conter aspas simples nem quebra de linha.
-for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE S3_BUCKET; do
+for nome in DATABASE_URL JWT_SECRET ABRIGO_CIDADE ABRIGO_TELEFONE S3_BUCKET SENTRY_DSN; do
   case "${!nome}" in
     *"'"* | *$'\n'*) falha "o parâmetro de $nome contém aspas simples ou quebra de linha." ;;
   esac
@@ -126,11 +128,14 @@ ABRIGO_TELEFONE='$ABRIGO_TELEFONE'
 # Upload de imagens (S3). As credenciais vêm da role da EC2 (IMDSv2), não daqui.
 AWS_REGION='$REGIAO'
 S3_BUCKET='$S3_BUCKET'
+
+# Monitoramento (Sentry). Vazio = desligado.
+SENTRY_DSN='$SENTRY_DSN'
 EOF
 )
 chmod 600 "$ENV_ARQ.novo"
 mv -f "$ENV_ARQ.novo" "$ENV_ARQ"
-unset DATABASE_URL JWT_SECRET
+unset DATABASE_URL JWT_SECRET SENTRY_DSN
 
 # Confere se o compose é válido com as variáveis novas (sem imprimir a configuração).
 dc config --quiet
