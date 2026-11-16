@@ -8,18 +8,26 @@
 #
 # Comandos úteis (na EC2, como root: "sudo -i" e "cd /opt/anjos"):
 #   docker compose -f docker-compose.prod.yml ps
-#   docker compose -f docker-compose.prod.yml logs -f api
+#   docker compose -f docker-compose.prod.yml logs -f api   (cópia local; ver x-logs-opcoes)
 # Mais em docs/deploy-aws.md.
 name: anjos
 
-# Limite de tamanho dos logs de cada container (3 arquivos de 10 MB). Sem isso, o log
-# cresce até encher o disco de 20 GB da EC2.
-x-logs: &logs
-  logging:
-    driver: json-file
-    options:
-      max-size: "10m"
-      max-file: "3"
+# Logs no CloudWatch Logs (driver awslogs), grupo /anjos/containers, com um log stream por
+# serviço (caddy, web, api). Quem envia é o daemon do Docker, com a role da EC2.
+#   - O grupo e a permissão são criados pelo Terraform (infra/logs.tf), por isso
+#     awslogs-create-group é "false". ORDEM: terraform apply ANTES do deploy deste arquivo,
+#     senão os containers não sobem.
+#   - "docker compose logs" continua funcionando: o Docker guarda uma cópia local
+#     ("dual logging", cache do daemon). As opções cache-* limitam essa cópia a 3 arquivos
+#     de 10 MB por container, para não encher o disco de 20 GB da EC2 (max-size e max-file
+#     são do json-file e não se aplicam ao awslogs).
+# Cada serviço usa "<<: *logs-opcoes" e acrescenta só o awslogs-stream com o próprio nome.
+x-logs-opcoes: &logs-opcoes
+  awslogs-region: sa-east-1
+  awslogs-group: /anjos/containers
+  awslogs-create-group: "false"
+  cache-max-size: "10m"
+  cache-max-file: "3"
 
 services:
   # Proxy reverso com HTTPS automático (ver Caddyfile). É o único container com portas
@@ -39,7 +47,11 @@ services:
     depends_on:
       - api
       - web
-    <<: *logs
+    logging:
+      driver: awslogs
+      options:
+        <<: *logs-opcoes
+        awslogs-stream: caddy
 
   # Frontend (arquivos estáticos do React servidos na porta 8080, só na rede interna).
   web:
@@ -49,7 +61,11 @@ services:
       - "8080"
     security_opt:
       - no-new-privileges:true
-    <<: *logs
+    logging:
+      driver: awslogs
+      options:
+        <<: *logs-opcoes
+        awslogs-stream: web
 
   # API (backend). Porta 4000 só na rede interna: da internet, só se chega pelo Caddy em /api.
   api:
@@ -89,7 +105,11 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
-    <<: *logs
+    logging:
+      driver: awslogs
+      options:
+        <<: *logs-opcoes
+        awslogs-stream: api
 
 volumes:
   caddy-dados:

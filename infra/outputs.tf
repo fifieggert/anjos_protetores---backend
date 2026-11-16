@@ -59,6 +59,11 @@ output "uploads_regiao" {
   value       = aws_s3_bucket.uploads.region
 }
 
+output "logs_grupo" {
+  description = "Log group do CloudWatch com os logs dos containers (um log stream por serviço: caddy, web, api)."
+  value       = aws_cloudwatch_log_group.containers.name
+}
+
 output "comando_ssm_sessao" {
   description = "Comando para abrir um terminal na EC2 sem SSH (precisa do Session Manager plugin)."
   value       = "aws ssm start-session --target ${aws_instance.app.id} --region ${var.region}"

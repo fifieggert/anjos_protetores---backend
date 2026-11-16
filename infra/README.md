@@ -21,6 +21,7 @@ código com Terraform. Todo recurso tem um comentário explicando por que existe
         └───────────────────────────────────────────────────────────┘
    GitHub Actions ──OIDC──► role github-actions-deploy ──► ECR (push) + SSM (deploy na EC2)
    EC2 (container api) ──role via IMDSv2──► S3 anjos-uploads-<conta> (privado, só uploads/*)
+   EC2 (daemon do Docker, driver awslogs) ──role──► CloudWatch Logs /anjos/containers (14 dias)
 ```
 
 | Arquivo | Conteúdo |
@@ -35,7 +36,8 @@ código com Terraform. Todo recurso tem um comentário explicando por que existe
 | `segredos.tf` | Senha do banco, `JWT_SECRET` e `DATABASE_URL` no SSM Parameter Store |
 | `github_oidc.tf` | Provedor OIDC do GitHub e role de deploy |
 | `armazenamento.tf` | Bucket S3 privado dos uploads de imagens, permissão da EC2 em `uploads/*`, parâmetro `/anjos/s3_bucket` |
-| `outputs.tf` | IP, endpoints, URLs do ECR, ARN da role, comando do SSM |
+| `logs.tf` | Log group `/anjos/containers` (CloudWatch Logs, 14 dias) e permissão da EC2 para gravar nele |
+| `outputs.tf` | IP, endpoints, URLs do ECR, ARN da role, log group, comando do SSM |
 
 Decisões de segurança, resumidas:
 
@@ -239,6 +241,7 @@ Valores aproximados em dólar; confira na
 | Backups do RDS (até 20 GB) | grátis até o tamanho do banco | 0 |
 | ECR (algumas imagens, ~1 GB) | US$ 0,10/GB | ~0,1 |
 | S3 uploads (até ~5 GB de fotos + requisições) | ~US$ 0,0405/GB + ~US$ 0,007 por mil PUT | ~0,2 |
+| CloudWatch Logs (poucos MB/dia, retenção de 14 dias) | 5 GB/mês de ingestão e armazenamento grátis | ~0 |
 | SSM Parameter Store (padrão), KMS `aws/ssm`, OIDC, IAM | grátis | 0 |
 | **Total** | | **~US$ 45/mês** (~US$ 1,50/dia) |
 
@@ -352,6 +355,66 @@ possibilidade de recuperar (o versionamento está desligado). Para guardar as fo
 ```bash
 aws s3 sync "s3://$(terraform output -raw uploads_bucket)/uploads/" ./backup-uploads/
 ```
+
+## Logs no CloudWatch
+
+Os logs dos containers (`caddy`, `web`, `api`) vão para o CloudWatch Logs pelo driver
+`awslogs` do Docker, configurado em `deploy/docker-compose.prod.yml` (`logs.tf`).
+
+### O que foi criado
+
+| Recurso | Configuração |
+|---|---|
+| `aws_cloudwatch_log_group.containers` | `/anjos/containers`, `retention_in_days = 14`, criptografia padrão do CloudWatch (chave gerenciada pela AWS) |
+| `aws_iam_role_policy.ec2_logs` | Role da EC2: só `logs:CreateLogStream` e `logs:PutLogEvents`, só nesse grupo e nos seus log streams. Sem `logs:CreateLogGroup` (o compose usa `awslogs-create-group: "false"`) e sem leitura |
+
+Output novo: `logs_grupo`. Quem envia os logs é o daemon do Docker, no host (não um
+container), com as credenciais da role pelo IMDSv2.
+
+### Ordem obrigatória
+
+**`terraform apply` ANTES do deploy do compose novo.** Sem o grupo ou sem a permissão, o
+Docker não cria o log stream e os containers **não sobem**.
+
+```bash
+terraform plan -out=tfplan
+```
+
+O plan deve mostrar **2 para criar, 0 para alterar, 0 para destruir** (o log group e a
+política), mais o output `logs_grupo`. Se aparecer qualquer alteração ou replace em
+`aws_instance.app`, **pare** e investigue.
+
+```bash
+terraform apply tfplan
+```
+
+Conferir:
+
+```bash
+aws logs describe-log-groups --log-group-name-prefix /anjos/containers --region sa-east-1 \
+  --query 'logGroups[].[logGroupName,retentionInDays]'        # /anjos/containers, 14
+aws iam get-role-policy --role-name anjos-ec2 --policy-name anjos-ec2-logs
+```
+
+Depois disso, faça o deploy (push na `main` ou `deploy.sh` à mão). Os três containers são
+recriados, e em poucos segundos os log streams `caddy`, `web` e `api` aparecem no console:
+**CloudWatch > Logs > Log groups > `/anjos/containers`** (região São Paulo). Mais detalhes
+(Logs Insights, `aws logs tail`, cópia local do `docker compose logs`) em
+`docs/deploy-aws.md`, seção *Logs no CloudWatch*.
+
+### Custo e retenção
+
+O nível gratuito permanente cobre 5 GB/mês de ingestão e armazenamento; esta aplicação gera
+poucos MB por dia, então o custo esperado é ~US$ 0. A retenção de 14 dias apaga os eventos
+antigos sozinha, e o armazenamento não cresce indefinidamente. Para guardar por mais tempo,
+mude `retention_in_days` (valores aceitos pela AWS: 1, 3, 5, 7, 14, 30, 60, 90...) e rode o
+`apply`.
+
+### Voltar atrás
+
+Troque o driver no compose de volta para `json-file` e faça o deploy **antes** de remover
+`logs.tf`. Se o grupo for apagado com o compose ainda em `awslogs`, os containers deixam de
+subir no próximo deploy ou reinício.
 
 ## Problemas comuns
 
