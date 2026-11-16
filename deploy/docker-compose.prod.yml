@@ -28,6 +28,8 @@ x-logs-opcoes: &logs-opcoes
   awslogs-create-group: "false"
   cache-max-size: "10m"
   cache-max-file: "3"
+  mode: non-blocking
+  max-buffer-size: "4m"
 
 services:
   # Proxy reverso com HTTPS automático (ver Caddyfile). É o único container com portas
