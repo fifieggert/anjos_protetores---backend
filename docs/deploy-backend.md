@@ -20,7 +20,9 @@ Docker e CI. O deploy na AWS (CD) está em [deploy-aws.md](deploy-aws.md).
 | `STORAGE_DRIVER` | Onde ficam as imagens enviadas (`POST /api/imagens`): `local` (pasta `./uploads`, **só desenvolvimento**) ou `s3`. Em produção, `local` é recusado. Valor inválido não derruba a API: só desabilita o upload (503) | Não (padrão `s3` em produção, `local` fora dela) | `s3` |
 | `S3_BUCKET` | Bucket privado das imagens. Sem ele, com `s3`, a API sobe normalmente e o upload responde 503. Não é segredo | Só para usar o upload com `s3` | `anjos-uploads-123456789012` |
 | `AWS_REGION` | Região do bucket. As credenciais vêm da cadeia padrão da AWS (na EC2, a role da instância): **nunca** use chaves de acesso em variáveis | Não (padrão `sa-east-1`) | `sa-east-1` |
-| `NODE_ENV` | Já vem `production` na imagem | Não | `production` |
+| `SENTRY_DSN` | Liga o monitoramento de erros e desempenho (Sentry). Sem ela, o Sentry fica desligado e nenhuma chamada de rede é feita. Em produção vem do SSM (`/anjos/sentry_dsn`); **nunca** coloque o valor em arquivos do repositório | Não | `https://chavefalsa@o0.ingest.sentry.io/1` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Fração das requisições com trace de desempenho, de `0` a `1`. Valor inválido usa o padrão | Não (padrão `0.2`) | `0.2` |
+| `NODE_ENV` | Já vem `production` na imagem. Também é o `environment` dos eventos do Sentry | Não | `production` |
 | `ADMIN_NOME`, `ADMIN_CPF`, `ADMIN_EMAIL`, `ADMIN_SENHA` | Só para o comando que cria o primeiro ADMIN | Só nesse comando | ver abaixo |
 
 Gerar um `JWT_SECRET` aleatório:
@@ -30,6 +32,26 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
 Upload de imagens (fluxo, validações e testes): ver [upload.md](upload.md).
+
+## Monitoramento (Sentry)
+
+Configurado em `src/instrument.ts`, importado no `src/server.ts` logo depois do
+`dotenv/config` e antes dos demais módulos (o SDK precisa iniciar antes do Express).
+
+- **Desligado sem `SENTRY_DSN`**: nada é inicializado e nenhuma chamada de rede é feita
+  (padrão em desenvolvimento e nos testes, que usam o `@sentry/node` mockado).
+- **Erros reportados**: só os que a API responde com **500 inesperado**. `AppError`
+  (inclusive o 503 do upload desabilitado), validação e erros conhecidos do Prisma e do
+  `express.json` (4xx) não são reportados. O critério é o mesmo do `tratarErros`
+  (`deveReportarErro` em `src/middleware/errorMiddleware.ts`), aplicado na captura
+  automática do Express e no `beforeSend`. O `Sentry.setupExpressErrorHandler(app)` fica em
+  `src/app.ts`, depois das rotas e antes do `tratarErros`; as respostas da API não mudam.
+- **LGPD**: `sendDefaultPii: false` e o `beforeSend` remove de todo evento o corpo da
+  requisição, os cookies, os headers (inclusive `Authorization`) e a query string (também
+  da URL), porque a API recebe nome e telefone de interessados em adoção.
+- **Desempenho**: `tracesSampleRate` vem de `SENTRY_TRACES_SAMPLE_RATE` (padrão `0.2`).
+- **Confirmação**: ao subir com o Sentry ligado, a API envia a mensagem de nível `info`
+  **"API iniciada"**. Se ela aparecer no painel do projeto, a integração está funcionando.
 
 Sobre `TRUST_PROXY`: use o número exato de proxies. Sem proxy, deixe vazio: assim ninguém
 foge do limitador forjando o header `X-Forwarded-For`. Valores como `true` ou faixas de IP

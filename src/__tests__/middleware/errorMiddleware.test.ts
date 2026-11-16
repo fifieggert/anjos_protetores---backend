@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
-import { rotaNaoEncontrada, tratarErros } from "../../middleware/errorMiddleware";
+import { deveReportarErro, rotaNaoEncontrada, tratarErros } from "../../middleware/errorMiddleware";
 import { AppError } from "../../utils/AppError";
 import { erroPrisma } from "../helpers/erros";
 import { proximo, requisicao, resposta } from "../helpers/express";
@@ -86,6 +86,28 @@ describe("tratarErros", () => {
         const res = tratar(erro);
         expect(res.statusCode).toBe(500);
         expect(res.corpo).toEqual({ error: "Erro interno do servidor." });
+    });
+});
+
+describe("deveReportarErro (monitoramento: só o que vira 500 inesperado)", () => {
+    it.each([
+        ["AppError 400", new AppError(400, "x"), false],
+        ["AppError 503 (esperado)", new AppError(503, "x"), false],
+        ["Prisma P2025 (404)", erroPrisma("P2025"), false],
+        ["Prisma P2002 (409)", erroPrisma("P2002"), false],
+        ["express.json entity.too.large (413)", Object.assign(new Error("x"), { type: "entity.too.large" }), false],
+        ["Error comum (500)", new Error("x"), true],
+        ["Prisma desconhecido (500)", erroPrisma("P9999"), true],
+        ["valor que não é objeto (500)", "falhou", true],
+    ])("%s: %s", (_caso, erro, esperado) => {
+        expect(deveReportarErro(erro)).toBe(esperado);
+    });
+
+    it("a decisão bate com o status que o tratarErros devolve", () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        for (const erro of [new AppError(422, "x"), erroPrisma("P2034"), erroPrisma("P9999"), new Error("x")]) {
+            expect(deveReportarErro(erro)).toBe(!(erro instanceof AppError) && tratar(erro).statusCode >= 500);
+        }
     });
 });
 
